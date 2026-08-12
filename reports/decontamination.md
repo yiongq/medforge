@@ -31,24 +31,24 @@
 - `cmexam-test-6681` ← `med-o1-sft-zh-12767`(覆盖率 0.722)
 - `cmexam-test-3274` ← `med-o1-sft-zh-7639`(覆盖率 0.686)
 - `cmexam-test-2473` ← `med-o1-sft-zh-4705`(覆盖率 0.684)
-- `cmexam-test-3257` ← `med-o1-sft-zh-19744`(覆盖率 0.684)
 - `cmexam-test-3257` ← `med-o1-sft-zh-16988`(覆盖率 0.684)
+- `cmexam-test-3257` ← `med-o1-sft-zh-19744`(覆盖率 0.684)
 - `cmexam-test-5328` ← `med-o1-sft-zh-13278`(覆盖率 0.671)
 - `cmexam-test-6274` ← `med-o1-sft-zh-14461`(覆盖率 0.667)
 - `cmexam-test-5487` ← `med-o1-sft-zh-4065`(覆盖率 0.664)
 - `cmexam-test-613` ← `med-o1-sft-zh-7639`(覆盖率 0.663)
 - `cmexam-test-1642` ← `med-o1-sft-zh-17360`(覆盖率 0.656)
-- `cmexam-test-5437` ← `med-o1-sft-zh-5053`(覆盖率 0.65)
 - `cmexam-test-5437` ← `med-o1-sft-zh-19494`(覆盖率 0.65)
+- `cmexam-test-5437` ← `med-o1-sft-zh-5053`(覆盖率 0.65)
 
 ### vs cmb-val
 
 - `cmb-val-274` ← `med-o1-sft-zh-5744`(覆盖率 0.533)
 - `cmb-val-274` ← `med-o1-sft-zh-7959`(覆盖率 0.467)
+- `cmb-val-235` ← `med-o1-sft-zh-16988`(覆盖率 0.333)
 - `cmb-val-235` ← `med-o1-sft-zh-3070`(覆盖率 0.333)
 - `cmb-val-235` ← `med-o1-sft-zh-20096`(覆盖率 0.333)
 - `cmb-val-235` ← `med-o1-sft-zh-2763`(覆盖率 0.333)
-- `cmb-val-235` ← `med-o1-sft-zh-16988`(覆盖率 0.333)
 - `cmb-val-235` ← `med-o1-sft-zh-19744`(覆盖率 0.333)
 
 ### vs medxpertqa

@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from rich import print as rprint
 
@@ -29,37 +28,25 @@ from medforge.data.decontaminate import (
     scan,
     unscannable,
 )
-from medforge.data.normalize import ADAPTERS, drop_counts
+from medforge.data.normalize import drop_counts
 from medforge.data.schema import Sample
+from medforge.data.sources import EVAL_SOURCES, ROOT, TRAIN_SOURCES, load_source
 
-ROOT = Path(__file__).resolve().parents[3]
-RAW = ROOT / "data" / "raw"
 PROCESSED = ROOT / "data" / "processed"
 REPORTS = ROOT / "reports"
-
-# 训练侧题池与评测集清单:新增数据源在这里挂接
-TRAIN_SOURCES = [("med-o1-verifiable", "med-o1-verifiable.train.jsonl", ""),
-                 ("med-o1-sft-zh", "med-o1-sft-zh.train.jsonl", "")]
-EVAL_SOURCES = [("cmexam", "cmexam.test.jsonl", "test"),
-                ("cmb-val", "cmb.val.jsonl", ""),
-                ("medxpertqa", "medxpertqa.test.jsonl", "")]
-
-
-def load_samples(name: str, filename: str, split: str) -> list[Sample]:
-    rows = [json.loads(line) for line in (RAW / filename).open(encoding="utf-8")]
-    samples = list(ADAPTERS[name](rows, split))
-    rprint(f"  {name}: {len(rows)} 行 → {len(samples)} 样本")
-    return samples
 
 
 def main() -> None:
     rprint("[bold]== 加载数据源 ==[/]")
     train: list[Sample] = []
-    for args in TRAIN_SOURCES:
-        train.extend(load_samples(*args))
+    for name in TRAIN_SOURCES:
+        samples = load_source(name)
+        rprint(f"  {name}: {len(samples)} 样本")
+        train.extend(samples)
     evals: dict[str, list[Sample]] = {}
-    for name, filename, split in EVAL_SOURCES:
-        evals[name] = load_samples(name, filename, split)
+    for name in EVAL_SOURCES:
+        evals[name] = load_source(name)
+        rprint(f"  {name}: {len(evals[name])} 样本")
 
     rprint("[bold]== 字面去污染扫描(字符 10-gram)==[/]")
     # 只比题干:选项文本会稀释覆盖率造成漏报;题干撞了就该人工看
@@ -98,7 +85,7 @@ def main() -> None:
         f"≥{SUSPICIOUS} 记存疑(仅报告);模板噪声按文档频率 >{BOILERPLATE_DF:.1%} 剔出索引。",
         "只比题干,不比选项。embedding 语义层接入后在此追加第二节。",
         "",
-        f"训练题池:{len(train)} 条(来源:{', '.join(n for n, _, _ in TRAIN_SOURCES)})",
+        f"训练题池:{len(train)} 条(来源:{', '.join(TRAIN_SOURCES)})",
         f"剔除污染样本:{len(removed)} 条 → 干净题池 {len(clean)} 条",
         "",
         "| 评测集 | 题数 | 污染命中 | 存疑命中 | 短题干不可扫描 |",
