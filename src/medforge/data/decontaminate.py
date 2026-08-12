@@ -13,7 +13,11 @@ Foundation-Sec-8B 用 8-gram);本文件是字面层,语义层(embedding)
 W1a 审查修复记录:
 - 共享模板句曾导致 train×eval 存疑配对爆炸(合成实测 250 万 Hit)→
   文档频率截断(模板 shingle 剔出索引)+ 每题只留 top-k 命中
-- 归一化后不足 10 字的短评测题曾必然漏报 → 走独立的子串包含通道
+- 短题干曾尝试子串包含通道,真实数据实测是误报工厂:考题「FDP」(3 字符)
+  命中英文训练题 "doses o[f DP]T" 的跨词碎片,单源就误剔上千条。
+  结论:归一化后 <NGRAM 字符的题干(CMExam 占 12%,如「甘味的作用特点是」)
+  题意都在选项里,对开放题训练池无字面泄漏面——正确处理是标「不可扫描」
+  进报告(unscannable()),而不是硬匹配。
 """
 
 from __future__ import annotations
@@ -79,14 +83,8 @@ def scan(
     hits: list[Hit] = []
     for eid, text in eval_items:
         t = normalize_text(text)
-        if not t:
-            continue
         if len(t) < n:
-            # 短文本通道:10-gram 索引对它天然失明,直接做子串包含(短题极少,线性扫得起)
-            for tid, tt in train_norm:
-                if t in tt:
-                    hits.append(Hit(eid, tid, 1.0, "contaminated"))
-            continue
+            continue  # 不可扫描:由 unscannable() 单独暴露,调用方写进报告
         ss = _shingles_norm(t, n)
         counter: dict[str, int] = defaultdict(int)  # train_id -> 命中 shingle 数
         for s in ss:
@@ -108,3 +106,8 @@ def scan(
 def contaminated_train_ids(hits: list[Hit]) -> set[str]:
     """要从训练集剔除的样本 id。存疑档不剔除、只进报告——宁可人工看,不静默扔数据。"""
     return {h.train_id for h in hits if h.level == "contaminated"}
+
+
+def unscannable(eval_items: list[tuple[str, str]], n: int = NGRAM) -> list[str]:
+    """归一化后短于 n 的评测题 id:字面查重对它们无能为力,报告里必须如实公布。"""
+    return [eid for eid, text in eval_items if len(normalize_text(text)) < n]

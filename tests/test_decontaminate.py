@@ -1,6 +1,12 @@
 """去污染层单测:撞题/改写/无关三种关系 + [review] 爆炸与短文本回归锁。"""
 
-from medforge.data.decontaminate import TOP_K_HITS, contaminated_train_ids, scan, shingles
+from medforge.data.decontaminate import (
+    TOP_K_HITS,
+    contaminated_train_ids,
+    scan,
+    shingles,
+    unscannable,
+)
 
 Q = "患者男性65岁,突发胸骨后压榨性疼痛3小时,心电图示V1-V4导联ST段抬高,最可能的诊断是急性前壁心肌梗死"
 
@@ -48,8 +54,9 @@ def test_review_boilerplate_does_not_explode():
     assert not contaminated_train_ids(hits)  # 只共享模板不共享正文,不应判污染
 
 
-def test_review_short_eval_contained_in_long_train():
-    # 归一化后不足 10 字的评测题整体出现在长训练文本里:曾必然漏报,现走子串通道
-    long_train = "药理学重点:青霉素的作用机制是抑制细菌细胞壁合成,对繁殖期细菌杀伤力强"
-    hits = scan([("t1", long_train)], [("e1", "青霉素的作用")])
-    assert hits and hits[0].level == "contaminated" and hits[0].train_id == "t1"
+def test_review_short_eval_is_unscannable_not_matched():
+    # 短题干曾走子串通道,真实数据证明是误报工厂(「FDP」命中 "doses o[f DP]T"):
+    # 现在短题干不参与匹配,由 unscannable() 单独暴露给报告
+    long_train = "For an 11-month-old child who has received two doses of DPT and polio"
+    assert scan([("t1", long_train)], [("e1", "FDP")]) == []
+    assert unscannable([("e1", "FDP"), ("e2", Q)]) == ["e1"]

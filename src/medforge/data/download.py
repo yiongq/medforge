@@ -25,10 +25,13 @@ DATASETS: dict[str, tuple[str, list[str]]] = {
     "med-o1-sft-zh": ("FreedomIntelligence/medical-o1-reasoning-SFT", ["train"]),  # config=zh,见下
     "cmexam": ("fzkuji/CMExam", ["train", "validation", "test"]),
     "medxpertqa": ("TsinghuaC3I/MedXpertQA", ["test"]),  # config=Text;防污染设计的困难集(英文)
+    # 幻觉评测源:官方版(UTAustin),pqa_labeled 是人工标注的高质量子集;
+    # 任务形态是「判断给定回答是否幻觉」,与 QA 考卷不同,评测协议在 EvalScope 适配层单独设计
+    "medhallu": ("UTAustin-AIHealth/MedHallu", ["train"]),
 }
 
 # 需要指定 config 的数据源
-CONFIGS = {"med-o1-sft-zh": "zh", "medxpertqa": "Text"}
+CONFIGS = {"med-o1-sft-zh": "zh", "medxpertqa": "Text", "medhallu": "pqa_labeled"}
 
 
 def fetch_cmb() -> None:
@@ -85,7 +88,7 @@ def main() -> None:
     for name in names:
         try:
             fetch_cmb() if name == "cmb" else fetch(name)
-        except Exception as e:  # 逐源隔离:一个源挂了不影响其他,但最后必须整体报错
+        except Exception as e:  # noqa: BLE001  逐源隔离:一个源挂了不影响其他;错误可见且最终非零退出,不是吞错
             rprint(f"  [red]✗ {name}: {type(e).__name__}: {e}[/]")
             failures.append(name)
     if failures and "HF_ENDPOINT" not in os.environ:
