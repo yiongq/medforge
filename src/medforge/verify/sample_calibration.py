@@ -54,6 +54,9 @@ def sample() -> None:
 
 
 def generate() -> None:
+    from medforge.env import load_env
+
+    load_env()
     base_url = os.environ.get("MEDFORGE_JUDGE_BASE_URL")
     api_key = os.environ.get("MEDFORGE_JUDGE_API_KEY")
     model = os.environ.get("MEDFORGE_JUDGE_MODEL")

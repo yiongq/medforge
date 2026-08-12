@@ -68,6 +68,9 @@ _JUDGE_PROMPT = """你是医学考试判卷员。判断考生的最终答案与�
 
 
 def verify_by_llm(sample: Sample, output: str) -> Verdict:
+    from medforge.env import load_env
+
+    load_env()
     base_url = os.environ.get("MEDFORGE_JUDGE_BASE_URL")
     api_key = os.environ.get("MEDFORGE_JUDGE_API_KEY")
     model = os.environ.get("MEDFORGE_JUDGE_MODEL")

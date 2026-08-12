@@ -18,5 +18,8 @@ __pycache__/
 .ruff_cache/
 dist/
 
+# 密钥
+.env
+
 # 系统
 .DS_Store
