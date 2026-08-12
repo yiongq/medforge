@@ -1,0 +1,22 @@
+# 数据与模型权重不进 git:脚本可重建,权重放 HF Hub / ModelScope
+# 根目录锚定:不带斜杠前缀会连 src/medforge/data/ 源码一起屏蔽(首次 commit 就踩过)
+/data/
+/models/
+*.safetensors
+*.gguf
+
+# 实验日志(SwanLab 云端为准)
+swanlog/
+output/
+wandb/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# 系统
+.DS_Store

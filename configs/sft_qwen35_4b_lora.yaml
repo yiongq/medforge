@@ -1,0 +1,35 @@
+# SFT 阶段一:Qwen3.5-4B + LoRA 全层
+# 运行:swift sft configs/sft_qwen35_4b_lora.yaml   (yaml 是位置参数,ms-swift 无 --config 标志)
+# 参数名以 ms-swift 锁定版本的官方文档为准(bootstrap 落盘的 env-freeze 里有精确版本)
+# 超参依据全部注释在行内;标【暂定】的项 = 无公开推导,W2 用对照实验定稿
+
+model: Qwen/Qwen3.5-4B
+tuner_type: lora         # ms-swift 4.x 的参数名(旧版叫 train_type,已废弃)
+
+# LoRA Without Regret(Thinking Machines 2025,已入 TRL 官方文档)三要点:
+# ① 挂全部线性层(尤其 MLP),只挂 attention 是效果打折的旧默认
+# ② 秩要装得下数据集信息量:4 万样本【暂定】r=64,W2 对 32/64/128 做对照
+# ③ LoRA 最优学习率 ≈ 全参的 10 倍:全参惯例 1e-5~2e-5 → 取 1e-4
+target_modules: all-linear
+lora_rank: 64
+lora_alpha: 128          # 惯例 alpha = 2r
+learning_rate: 1.0e-4
+lr_scheduler_type: cosine
+warmup_ratio: 0.03       # 全参惯例直接沿用
+
+num_train_epochs: 2      # 【暂定】SFT 蒸馏数据惯例 2-3 epoch,看 val loss 定
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4   # 有效 batch 16
+max_length: 4096         # CoT 样本长;超长截断率要在训练日志里确认 <1%
+torch_dtype: bfloat16
+gradient_checkpointing: true     # 24G 卡上换显存的标准手段
+seed: 42                 # 可复现口径(ADR 口径 5):不依赖框架默认值,显式落盘
+
+dataset: data/processed/sft_train.jsonl   # build_sft.py 产物(已去污染、已混通用数据)
+split_dataset_ratio: 0.02                 # 2% 做 val,盯过拟合
+save_steps: 200
+logging_steps: 10
+output_dir: output/sft_qwen35_4b_lora
+
+report_to: swanlab
+swanlab_project: medforge

@@ -1,0 +1,32 @@
+# DPO 阶段二:在 SFT 产物之上做偏好对齐
+# 偏好对来源:同题采样 8 解 → 验证器判分 → 对/错配对(build_dpo.py,W2 实现)
+# 运行:swift rlhf configs/dpo_qwen35_4b.yaml   (yaml 是位置参数;rlhf_type 已写在本文件内)
+# 参数名以 ms-swift 锁定版本的官方文档为准
+
+# 【暂定】SFT LoRA 需先合并:swift export --merge_lora true 产物名为 checkpoint-<step>-merged,
+# 路径以实际 step 为准;W2 在 scripts/ 加合并脚本,把产物软链成固定名后回填这里
+model: output/sft_qwen35_4b_lora/merged
+tuner_type: lora
+target_modules: all-linear
+lora_rank: 64
+lora_alpha: 128
+
+rlhf_type: dpo
+beta: 0.1                # DPO 论文默认;【暂定】W2 对 0.05/0.1/0.3 做对照
+learning_rate: 5.0e-6    # DPO 惯例比 SFT 低一个数量级以上,防把 SFT 学到的能力洗掉
+num_train_epochs: 1      # 偏好数据过多轮极易过拟合,业界惯例 1 epoch
+
+per_device_train_batch_size: 2   # DPO 同时前向 chosen/rejected,显存按双份算
+gradient_accumulation_steps: 8
+max_length: 4096
+torch_dtype: bfloat16
+gradient_checkpointing: true
+seed: 42
+
+dataset: data/processed/dpo_pairs.jsonl
+save_steps: 100
+logging_steps: 10
+output_dir: output/dpo_qwen35_4b
+
+report_to: swanlab
+swanlab_project: medforge
