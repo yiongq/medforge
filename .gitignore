@@ -1,6 +1,8 @@
 # 数据与模型权重不进 git:脚本可重建,权重放 HF Hub / ModelScope
 # 根目录锚定:不带斜杠前缀会连 src/medforge/data/ 源码一起屏蔽(首次 commit 就踩过)
-/data/
+# 例外:校准集是手工标注资产,脚本重建不出来,必须进版本库
+/data/*
+!/data/calibration/
 /models/
 *.safetensors
 *.gguf
