@@ -9,7 +9,7 @@ W1a 审查修复记录(每条都有实测复现,见 tests/):
 - 「不应选 C」的否定声明曾被当成答案且 last-wins 压过真声明 → 否定前缀不算声明
 - 「选择」作普通动词曾误触发(「选择 A 的考生忽略了…」)→ 从触发词移除
 - 中英混排「C, as ...」曾把 a 并进多选 → 延续段只认独立大写字母
-- CMB 实测存在 6 选项题 → 字母集放宽到 A-H
+- CMB 实测 6 选项、MedXpertQA 实测 10 选项(gold 含 I/J 各约 10%)→ 字母集放宽到 A-J
 - \\boxed{\\text{C}} 抽不出白烧 LLM 调用 → 先剥一层 \\text 包装
 """
 
@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass
 
 # 独立 token 的选项字母:后面紧跟汉字/字母/数字的不算(排除 B超、CT、X线)
-_L = r"[A-H](?![A-Za-z0-9\u4e00-\u9fff])"
+_L = r"[A-J](?![A-Za-z0-9\u4e00-\u9fff])"
 _BOXED_RE = re.compile(r"\\boxed\{([^{}]+)\}")
 _WRAP_RE = re.compile(r"\\(?:text|mathrm|mathbf)\{([^{}]*)\}")  # \boxed{\text{C}} 的内层包装
 # 触发词:「选择」是普通动词不收;故选/应选带否定前缀(不应选/误选/别选)时不算声明
@@ -28,12 +28,12 @@ _ANSWER_LINE_RE = re.compile(
     rf"\s*(?:是|为|:|:)?\s*[\*\s「【\[(]*({_L}(?:\s*[、,,和\s]\s*{_L})*)"
 )
 _EN_ANSWER_RE = re.compile(
-    r"(?:the\s+answer\s+is|answer\s*:)\s*[\*\s]*\(?([A-Ha-h])\)?(?![A-Za-z0-9])",
+    r"(?:the\s+answer\s+is|answer\s*:)\s*[\*\s]*\(?([A-Ja-j])\)?(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
-_LETTERS_RE = re.compile(r"[A-Ha-h]")
+_LETTERS_RE = re.compile(r"[A-Ja-j]")
 # boxed 内容整体是「字母+分隔」才算选择题答案;含其他文字(如 \boxed{肺栓塞})不算
-_BOXED_CHOICE_RE = re.compile(r"[A-Ha-h\s、,,和]+")
+_BOXED_CHOICE_RE = re.compile(r"[A-Ja-j\s、,,和]+")
 
 
 @dataclass

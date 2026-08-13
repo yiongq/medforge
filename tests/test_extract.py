@@ -35,6 +35,11 @@ class TestChoice:
         # CMB 实测存在 6 选项题
         assert extract_choice("答案是 F").value == "F"
 
+    def test_option_j_supported(self):
+        # MedXpertQA 实测 10 选项题,gold 含 I/J 各约 10%——曾因 A-H 硬编码整批误判
+        assert extract_choice("The answer is (J).").value == "J"
+        assert extract_choice("答案:I").value == "I"
+
     def test_abstain_on_no_declaration(self):
         assert extract_choice("A 选项描述了缺铁性贫血,B 选项则是巨幼细胞贫血的表现。") is None
 
