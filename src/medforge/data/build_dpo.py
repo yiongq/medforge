@@ -75,16 +75,11 @@ def classify_solution(sample: Sample, sol: str, llm_arbitrate: bool) -> str:
     return "wrong"
 
 
-def make_pairs(sample: Sample, solutions: list[str], llm_arbitrate: bool = False) -> list[dict]:
-    """一题多解 → 偏好对。规则:对解×错解笛卡尔积太冗余,每题最多出 2 对
-    (对解取最短的两个——短而对的推理是更好的教学信号【暂定】,错解随机)。"""
-    correct, wrong = [], []
-    for sol in solutions:
-        cls = classify_solution(sample, sol, llm_arbitrate)
-        if cls == "correct":
-            correct.append(sol)
-        elif cls == "wrong":
-            wrong.append(sol)
+def pair_from_classified(sample: Sample, solutions: list[str], classes: list[str]) -> list[dict]:
+    """已分类的一题多解 → 偏好对。规则:对解×错解笛卡尔积太冗余,每题最多出 2 对
+    (对解取最短的两个——短而对的推理是更好的教学信号【暂定】,错解无放回抽)。"""
+    correct = [sol for sol, c in zip(solutions, classes) if c == "correct"]
+    wrong = [sol for sol, c in zip(solutions, classes) if c == "wrong"]
     if not correct or not wrong:
         return []
     # crc32 而非 hash():str 的 hash 被 PYTHONHASHSEED 加盐,跨进程不稳定,
@@ -107,6 +102,12 @@ def make_pairs(sample: Sample, solutions: list[str], llm_arbitrate: bool = False
             "rejected_response": rejected,
         })
     return pairs
+
+
+def make_pairs(sample: Sample, solutions: list[str], llm_arbitrate: bool = False) -> list[dict]:
+    """串行便捷入口(测试与小规模用);大规模并行路径见 main() 的 classify 阶段。"""
+    classes = [classify_solution(sample, sol, llm_arbitrate) for sol in solutions]
+    return pair_from_classified(sample, solutions, classes)
 
 
 def main() -> None:
@@ -176,10 +177,44 @@ def main() -> None:
     f.close()
 
     by_id = {s.id: s for s in questions}
+    # 分类阶段并行 + 标签落盘缓存:2 万次 LLM 仲裁串行要 20+ 小时,16 并发 ≈ 1-2 小时;
+    # 中断重跑只补缺(仲裁按次计费,缓存就是钱)
+    label_file = PROCESSED / "dpo_labels.jsonl"
+    labels: dict[str, str] = {}
+    if label_file.exists():
+        for line in label_file.read_text(encoding="utf-8").splitlines():
+            r = json.loads(line)
+            labels[r["key"]] = r["cls"]
+    tasks = [(sid, i, sol) for sid, sols in done.items() if sid in by_id
+             for i, sol in enumerate(sols) if f"{sid}#{i}" not in labels]
+    rprint(f"分类 {len(tasks)} 个解(缓存命中 {len(labels)})")
+    lf = label_file.open("a", encoding="utf-8")
+    llock = threading.Lock()
+    n_cls = 0
+    with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
+        futs = {pool.submit(classify_solution, by_id[sid], sol, not args.no_llm_arbitrate): (sid, i)
+                for sid, i, sol in tasks}
+        for fut in as_completed(futs):
+            sid, i = futs[fut]
+            with llock:
+                n_cls += 1
+                try:
+                    cls = fut.result()
+                except Exception as e:  # noqa: BLE001  单解仲裁失败按 drop 处理,不废整批
+                    rprint(f"  ✗ 仲裁失败 {sid}#{i}: {type(e).__name__}")
+                    cls = "drop"
+                labels[f"{sid}#{i}"] = cls
+                lf.write(json.dumps({"key": f"{sid}#{i}", "cls": cls}, ensure_ascii=False) + "\n")
+                lf.flush()
+                if n_cls % 500 == 0:
+                    rprint(f"  [{n_cls}/{len(tasks)}]")
+    lf.close()
+
     pairs = []
     for sid, sols in done.items():
         if sid in by_id:
-            pairs.extend(make_pairs(by_id[sid], sols, llm_arbitrate=not args.no_llm_arbitrate))
+            classes = [labels.get(f"{sid}#{i}", "drop") for i in range(len(sols))]
+            pairs.extend(pair_from_classified(by_id[sid], sols, classes))
     dst = PROCESSED / "dpo_pairs.jsonl"
     with dst.open("w", encoding="utf-8") as f2:
         for p in pairs:
