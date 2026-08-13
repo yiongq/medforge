@@ -7,7 +7,11 @@ MODEL="${1:-Qwen/Qwen3.5-4B}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
 
 echo "== [1/3] 起 vLLM 服务(后台)=="
-uv run vllm serve "$MODEL" --served-model-name target --port 8000 &
+# vllm 默认走 HF Hub 拉模型,不认 ModelScope 缓存:先解析成本地路径再喂给它
+# (snapshot_download 幂等,已缓存时秒回路径)
+MODEL_PATH=$(uv run python -c "from modelscope import snapshot_download; print(snapshot_download('$MODEL'))")
+echo "   模型路径: $MODEL_PATH"
+uv run vllm serve "$MODEL_PATH" --served-model-name target --port 8000 &
 VLLM_PID=$!
 trap 'kill $VLLM_PID 2>/dev/null || true' EXIT
 until curl -sf http://127.0.0.1:8000/v1/models >/dev/null; do
