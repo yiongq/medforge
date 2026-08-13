@@ -44,3 +44,11 @@ W1 底分评测在两台 4090 上共踩 10+ 坑的完整复盘。每条都真实
 - 按量计费,关机即停;连续关机 15 天自动释放(数据清空)
 - 一切可重建:代码在 git、模型/数据集脚本重下、密钥本地留档——释放无损失
 - W1 实际学费:两台机约 15 元(其中 12 元是 550 驱动那台的无效试错)
+
+## W2 GPU 日检查单(审查提示的实测项)
+
+- vLLM 起 SFT 后模型时,确认返回的 content 是否含 `<think>` 段:若挂了 reasoning parser,
+  think 会被剥进 reasoning_content,DPO 采到的 chosen/rejected 就和 SFT 教的思考格式不一致——
+  必要时把 reasoning_content 拼回,保持一致
+- LoRA 合并用固定路径:swift export --adapters <ckpt> --merge_lora true --output_dir output/sft_qwen35_4b_lora/merged
+- build_dpo 默认要求 judge 已配置(fail-fast 会拦),GPU 机上记得放 .env

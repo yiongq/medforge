@@ -12,15 +12,18 @@
 被误杀成负例;--no-llm-arbitrate 可关,转为严格判错);无声明的解丢弃。
 
 输出 ms-swift DPO 格式:{"messages": [user, assistant(chosen)], "rejected_response": "..."}
-【暂定】字段名以 GPU 日 ms-swift 文档实测为准。
+(字段名已核实=官方 Custom-dataset 文档 DPO 示例原文,swift.readthedocs.io/en/latest/Customization/Custom-dataset.html)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
+import sys
 import threading
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from rich import print as rprint
@@ -84,11 +87,18 @@ def make_pairs(sample: Sample, solutions: list[str], llm_arbitrate: bool = False
             wrong.append(sol)
     if not correct or not wrong:
         return []
-    rng = random.Random(SEED + hash(sample.id) % 10000)
+    # crc32 而非 hash():str 的 hash 被 PYTHONHASHSEED 加盐,跨进程不稳定,
+    # 「重跑产出相同偏好对」的承诺会静默失效(审查实测三种 HASHSEED 选出不同 rejected)
+    rng = random.Random(SEED + zlib.crc32(sample.id.encode()) % 10000)
     correct.sort(key=len)
+    chosen_list = correct[:2]
+    # 无放回:错解够用时两对不共享同一条 rejected,保住负例多样性
+    if len(wrong) >= len(chosen_list):
+        rejected_list = rng.sample(wrong, len(chosen_list))
+    else:
+        rejected_list = [rng.choice(wrong) for _ in chosen_list]
     pairs = []
-    for chosen in correct[:2]:
-        rejected = rng.choice(wrong)
+    for chosen, rejected in zip(chosen_list, rejected_list):
         pairs.append({
             "messages": [
                 {"role": "user", "content": PROMPT.format(question=sample.render_question())},
@@ -108,6 +118,18 @@ def main() -> None:
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--no-llm-arbitrate", action="store_true", help="声明不符不走 LLM 仲裁,直接判错")
     args = ap.parse_args()
+
+    # fail-fast:开放题的负例只能来自 LLM 仲裁——judge 没配就跑采样,
+    # 结局是烧完 2-3 小时 GPU 后静默产出 0 条偏好对(审查实测复现)
+    if not args.no_llm_arbitrate:
+        from medforge.env import load_env
+
+        load_env()
+        missing = [k for k in ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
+                   if not os.environ.get(k)]
+        if missing:
+            rprint(f"[red]✗ LLM 仲裁已启用但 judge 未配置: {missing};配好 .env 或显式 --no-llm-arbitrate[/]")
+            sys.exit(2)
 
     from openai import OpenAI
 
@@ -162,6 +184,9 @@ def main() -> None:
     with dst.open("w", encoding="utf-8") as f2:
         for p in pairs:
             f2.write(json.dumps(p, ensure_ascii=False) + "\n")
+    if not pairs:
+        rprint("[red]✗ 偏好对为 0 条——采样已落盘可复用,检查判定链路后重跑配对[/]")
+        sys.exit(1)
     rprint(f"[green]✓[/] 偏好对 {len(pairs)} 条(源自 {len(done)} 题)→ {dst}")
 
 

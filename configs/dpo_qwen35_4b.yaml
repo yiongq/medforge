@@ -3,8 +3,9 @@
 # 运行:swift rlhf configs/dpo_qwen35_4b.yaml   (yaml 是位置参数;rlhf_type 已写在本文件内)
 # 参数名以 ms-swift 锁定版本的官方文档为准
 
-# 【暂定】SFT LoRA 需先合并:swift export --merge_lora true 产物名为 checkpoint-<step>-merged,
-# 路径以实际 step 为准;W2 在 scripts/ 加合并脚本,把产物软链成固定名后回填这里
+# SFT LoRA 合并(已核实源码):swift export --adapters <ckpt> --merge_lora true \
+#   --output_dir output/sft_qwen35_4b_lora/merged
+# 用 --output_dir 一步得到固定路径;不传时产物在 v<x>-<时间戳>/checkpoint-<step>-merged,别靠猜
 model: output/sft_qwen35_4b_lora/merged
 tuner_type: lora
 target_modules: all-linear

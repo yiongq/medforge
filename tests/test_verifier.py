@@ -42,6 +42,11 @@ class TestOpenRule:
     def test_exact_match_ignores_punct(self):
         assert verify_by_rule(open_q("急性心肌梗死"), r"\boxed{急性 心肌梗死}").correct is True
 
+    def test_review_trailing_comment_still_correct(self):
+        # 声明后带尾随评论:首子句截断候选应判对(否则 DPO 无仲裁模式会把对解打成负例)
+        v = verify_by_rule(open_q("阿司匹林"), "最终答案:阿司匹林,不过我不确定这是否正确")
+        assert v is not None and v.correct is True
+
     def test_review_superstring_drug_abstains(self):
         # 阿莫西林克拉维酸钾是另一种药:不能因字面包含判对
         assert verify_by_rule(open_q("阿莫西林"), "最终答案:阿莫西林克拉维酸钾") is None

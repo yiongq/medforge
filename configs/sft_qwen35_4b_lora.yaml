@@ -25,7 +25,11 @@ torch_dtype: bfloat16
 gradient_checkpointing: true     # 24G 卡上换显存的标准手段
 seed: 42                 # 可复现口径(ADR 口径 5):不依赖框架默认值,显式落盘
 
-dataset: data/processed/sft_train.jsonl   # build_sft.py 产物(已去污染、已混通用数据)
+dataset: data/processed/sft_train.jsonl   # build_sft.py 产物(已去污染、已去重、已混通用数据)
+# 混合数据(医疗带 <think>、通用不带)的官方处理:无 think 样本自动补空思考前缀、
+# 空 think 不计损失。两个值本就是混合思考模型的默认,显式写死而不依赖默认(官方 Qwen3.5 Best Practice 同款)
+add_non_thinking_prefix: true
+loss_scale: ignore_empty_think
 split_dataset_ratio: 0.02                 # 2% 做 val,盯过拟合
 save_steps: 200
 logging_steps: 10

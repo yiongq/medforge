@@ -1,5 +1,9 @@
 """SFT/DPO 数据构造的纯逻辑单测(不依赖 data/raw,CI 可跑)。"""
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from medforge.data.build_dpo import make_pairs
@@ -52,6 +56,37 @@ class TestMakePairs:
 
     def test_no_pair_when_all_wrong(self):
         assert make_pairs(self.sample(), ["最终答案:布洛芬"] * 3) == []
+
+    def test_distinct_rejected_when_available(self):
+        # [review] rng.choice 放回抽样曾让两对共享同一条 rejected,损失负例多样性
+        sols = [
+            "最终答案:阿司匹林",
+            "长一点的推理……最终答案:阿司匹林",
+            "最终答案:氯吡格雷",
+            "最终答案:替格瑞洛",
+        ]
+        pairs = make_pairs(self.sample(), sols)
+        assert len(pairs) == 2
+        assert pairs[0]["rejected_response"] != pairs[1]["rejected_response"]
+
+    def test_rejected_stable_across_hash_seeds(self):
+        # [review] hash(str) 被 PYTHONHASHSEED 加盐,跨进程不稳定曾让「可复现」承诺失效
+        code = (
+            "from medforge.data.build_dpo import make_pairs\n"
+            "from medforge.data.schema import Sample\n"
+            "s = Sample(id='q1', source='t', question='题', gold='阿司匹林')\n"
+            "sols = ['最终答案:阿司匹林', '最终答案:氯吡格雷', '最终答案:替格瑞洛']\n"
+            "print(make_pairs(s, sols)[0]['rejected_response'])\n"
+        )
+        outs = set()
+        for seed in ("1", "42"):
+            r = subprocess.run(
+                [sys.executable, "-c", code],
+                env={**os.environ, "PYTHONHASHSEED": seed},
+                capture_output=True, text=True, check=True,
+            )
+            outs.add(r.stdout.strip())
+        assert len(outs) == 1
 
     def test_abstain_not_treated_as_wrong(self):
         # 弃权解不得进 rejected——判不准的解配进偏好对就是毒数据

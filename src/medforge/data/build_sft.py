@@ -11,7 +11,7 @@
   W2 若医疗涨分/通用退化失衡再调)
 
 思考格式:assistant 内容为 <think>…</think> 包裹 CoT 后接正文——
-【暂定】与 Qwen3.5 对话模板的 thinking 约定一致,GPU 日用 ms-swift 模板渲染实测后定稿。
+已核实为 ms-swift 官方 thinking SFT 格式(Custom-dataset 文档示例 + Qwen3.5 Best Practice)。
 """
 
 from __future__ import annotations
@@ -37,16 +37,27 @@ def med_rows() -> list[dict]:
             if s["source"] == "med-o1-sft-zh":
                 pool_ids.add(s["id"])
     rows = []
+    seen: set[tuple[str, str]] = set()
+    n_dup = 0
     with (RAW / "med-o1-sft-zh.train.jsonl").open(encoding="utf-8") as f:
         for i, line in enumerate(f):
             if f"med-o1-sft-zh-{i}" not in pool_ids:
                 continue  # 去污染剔除的样本
             r = json.loads(line)
             assistant = f"<think>\n{r['Complex_CoT'].strip()}\n</think>\n\n{r['Response'].strip()}"
+            user = r["Question"].strip()
+            # 上游数据集实测自带 ~3000 组逐字节重复(占 30%):不去重等于给部分题双倍加权
+            key = (user, assistant)
+            if key in seen:
+                n_dup += 1
+                continue
+            seen.add(key)
             rows.append({"messages": [
-                {"role": "user", "content": r["Question"].strip()},
+                {"role": "user", "content": user},
                 {"role": "assistant", "content": assistant},
             ]})
+    if n_dup:
+        print(f"[build_sft] 医疗侧内容去重:剔 {n_dup} 条重复")
     return rows
 
 

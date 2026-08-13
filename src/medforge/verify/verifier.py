@@ -52,7 +52,10 @@ def verify_by_rule(sample: Sample, output: str) -> Verdict | None:
     gold_n, out_n = _norm(sample.gold), _norm(ext.value)
     if not gold_n:
         return None
-    if out_n == gold_n:
+    # 抽取值可能带尾随评论(「阿司匹林,不过我不确定」):取首子句作第二候选,
+    # 仍只做精确相等——「阿莫西林克拉维酸钾」无标点截不短,不会误配「阿莫西林」
+    first_clause = _norm(re.split(r"[,,。;;!!??]", ext.value, maxsplit=1)[0])
+    if gold_n in (out_n, first_clause):
         return Verdict(True, "rule", f"matched={ext.value!r}")
     return None
 
