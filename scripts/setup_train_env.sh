@@ -10,6 +10,6 @@ SYS_PY="$(ls /root/miniconda3/bin/python3.12 2>/dev/null || command -v python3.1
 uv venv ~/swift-env --python "$SYS_PY"
 UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple" \
   uv pip install --python ~/swift-env/bin/python -U "ms-swift[swanlab]"
-~/swift-env/bin/pip freeze > "reports/train-env-freeze-$(date +%Y%m%d).txt" 2>/dev/null || \
-  ~/swift-env/bin/python -m pip freeze > "reports/train-env-freeze-$(date +%Y%m%d).txt"
+# uv 建的 venv 没有 pip,freeze 用 uv 出
+uv pip freeze --python ~/swift-env/bin/python > "reports/train-env-freeze-$(date +%Y%m%d).txt"
 echo "✓ 训练环境就绪:~/swift-env/bin/swift sft configs/sft_qwen35_4b_lora.yaml"
