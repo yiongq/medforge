@@ -8,11 +8,13 @@
 
 | 配置 | CMB | CMExam | MedXpertQA-Text | 幻觉(MedHallu 子集) |
 |---|---|---|---|---|
-| Qwen3.5-4B(base) | – | – | – | – |
+| Qwen3.5-4B(base,协议 v1¹) | 59.6% | 71.1% | 21.6% | – |
 | + SFT | – | – | – | – |
 | + SFT + DPO | – | – | – | – |
 | + SFT + GRPO | – | – | – | – |
 | Qwen3.5-9B 定稿复跑 | – | – | – | – |
+
+¹ v1 = temp 0 / max_tokens 2048,思考型模型在难题上被截断,困难卷为保守下界;W2 起用协议 v2 重跑基线后同协议对比。详见 [reports/runs/base/summary.md](reports/runs/base/summary.md)。
 
 部署侧:vLLM + FP8/AWQ 压测曲线(TTFT / 吞吐 vs 并发)见 `reports/`(W3)。
 
@@ -59,7 +61,8 @@ uv run python -m medforge.data.download         # 拉取数据集(国内可加 H
 ## 路线图
 
 - [x] W1a 骨架:数据下载与归一 / 验证器(规则层+LLM 兜底+校准 CLI)/ 去污染字面层 / 报告层 + 单测,经双路对抗审查修复
-- [ ] W1b 去污染 embedding 层 + MedHallu 数据源 + EvalScope 四套考卷适配 + 200 题人工校准集 + base 底分(首次租卡)
+- [x] W1b 验证器校准(96.5%)+ 去污染真报告 + base 三卷底分落盘(两台租卡实战,踩坑笔记见 docs/)
+- [ ] W2 前置:协议 v2 重跑基线 · 去污染 embedding 层 · MedHallu 评测协议
 - [ ] W2 SFT → DPO → GRPO 三档对照,4B 全流程
 - [ ] W3 部署(vLLM/FP8/压测/监控)+ 前台(同题三模型对比,回放+live 双模式)+ 9B 定稿复跑
 - [ ] 二期 医疗工具调用模块 · 医疗 VQA LoRA 分支

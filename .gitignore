@@ -25,3 +25,6 @@ dist/
 
 # 系统
 .DS_Store
+
+# 评测原始作答体积大(73MB),不进 git:scored/summary 才是可追溯产物
+reports/runs/*/*.outputs.jsonl
