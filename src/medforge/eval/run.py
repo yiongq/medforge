@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -146,12 +147,22 @@ def main() -> None:
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
     # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
     ap.add_argument("--max-tokens", type=int, default=8192)
+    # 预登记随机抽样卷(协议 v2 的一部分):种子固定 → 每个 run 考完全相同的题,
+    # 对照有效;抽样量按 Wilson CI ±2pp 定。格式 "cmexam=2000,medxpertqa=1000"
+    ap.add_argument("--samples", default="", help="逐集抽样量,如 cmexam=2000,medxpertqa=1000;未列出的集全量")
     args = ap.parse_args()
+    sample_map = {}
+    for kv in filter(None, args.samples.split(",")):
+        k, _, v = kv.partition("=")
+        sample_map[k.strip()] = int(v)
 
     out_dir = ROOT / "reports" / "runs" / args.run_name
     tables = []
     for name in args.sets.split(","):
         samples = load_source(name.strip())
+        if name.strip() in sample_map:
+            # 固定种子抽样:adapter 按文件序稳定产出,同 seed 必得同一批题
+            samples = random.Random(42).sample(samples, min(sample_map[name.strip()], len(samples)))
         if args.limit:
             samples = samples[: args.limit]
         scored = run_set(
