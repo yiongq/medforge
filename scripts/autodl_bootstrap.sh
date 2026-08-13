@@ -5,8 +5,11 @@
 # 会卸掉本脚本第 3 步装的 GPU 栈;需要重装依赖时重跑本脚本即可。
 set -euo pipefail
 
-echo "== [1/4] 学术加速(AutoDL 内置,加速 HF/GitHub) =="
-if [ -f /etc/network_turbo ]; then source /etc/network_turbo; fi
+echo "== [1/4] 网络:卸掉学术加速代理,全部走国内源 =="
+# 学术加速代理对所有流量生效且大文件必截断(实测 uv Python 包、vllm 400MB 轮子两次翻车);
+# 我们的源(阿里 PyPI / ModelScope / hf-mirror)全是国内直连,不需要代理。
+# 只有 git clone github 需要加速,那一步在调用方各自处理。
+unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 echo "== [2/4] uv + 项目依赖 =="
