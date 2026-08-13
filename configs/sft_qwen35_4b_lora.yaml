@@ -37,3 +37,4 @@ output_dir: output/sft_qwen35_4b_lora
 
 report_to: swanlab
 swanlab_project: medforge
+swanlab_mode: local       # 无 token 的无头环境:本地记录曲线(swanlab watch 可视化);要上云再配 swanlab_token
