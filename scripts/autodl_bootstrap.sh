@@ -24,8 +24,10 @@ if [ -n "$SYS_PY" ]; then uv sync --python "$SYS_PY"; else uv sync; fi
 echo "== [3/4] 训练/推理栈(不进 pyproject:仅 GPU 机需要,且含 CUDA 依赖) =="
 # 版本策略:首次跑通后,用本步骤落盘的 freeze 文件把版本回填锁死(ADR 口径 5 可复现)
 # 学术加速只快 HF/GitHub、反而拖慢 PyPI——这 3GB 的轮子走阿里镜像
+# -U transformers:Qwen3.5(2026-03)要求新版 transformers 才认得 qwen3_5 架构,
+# 默认解析会落到过旧版本(GPU 机实测 vLLM 启动报 unrecognized architecture)
 UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple" \
-  uv pip install "ms-swift[swanlab,eval]" "vllm>=0.10" evalscope
+  uv pip install -U "ms-swift[swanlab,eval]" "vllm>=0.10" evalscope transformers
 mkdir -p reports
 uv pip freeze > "reports/env-freeze-$(date +%Y%m%d).txt"
 echo "   依赖快照 → reports/env-freeze-$(date +%Y%m%d).txt(报告引用数字时随 git hash 一并注明)"
