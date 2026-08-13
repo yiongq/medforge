@@ -19,7 +19,12 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 # 显式用镜像 conda 自带的 Python 3.12:uv 自装 Python 的下载会被学术加速代理截断
 # (实测 curl transfer closed / tar invalid,重试 52 分钟)
 SYS_PY="$(ls /root/miniconda3/bin/python3.12 2>/dev/null || command -v python3.12 || true)"
-if [ -n "$SYS_PY" ]; then uv sync --python "$SYS_PY"; else uv sync; fi
+# 锁文件的下载 URL 固定指向 files.pythonhosted.org,部分机房(实测北京B区)直连不通:
+# 仅这一步在子 shell 里借学术加速代理(全是小轮子,不触发大文件截断);其余步骤保持无代理国内源
+(
+  source /etc/network_turbo 2>/dev/null || true
+  if [ -n "$SYS_PY" ]; then uv sync --python "$SYS_PY"; else uv sync; fi
+)
 
 echo "== [3/4] 推理/评测栈(仅 vLLM+modelscope;训练栈 W2 用 setup_train_env.sh 独立装) =="
 # 教训(GPU 机实测):ms-swift 与 vllm 装进同一 venv 会让解析器连锁降级——
