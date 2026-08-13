@@ -9,7 +9,9 @@ dependencies = [
     # 刻意保持轻:本机只做数据工程/验证器/报告,不装 torch——
     # 训练与推理发生在租用 GPU 上,由 scripts/autodl_bootstrap.sh 安装 ms-swift/vLLM
     "datasets>=3.0",
-    "huggingface_hub>=0.26,<1.0",  # transformers 运行时硬检查 <1.0(wheel 元数据反而不拦),GPU 机上实测炸过
+    # 注意别给 hub 加 <1.0 上界:那是旧 transformers(≤4.x)的要求;新 transformers(5.x)反而需要 1.x。
+    # 曾因 ms-swift 同锅拖出旧 transformers 而误加上界,venv 分家后回归宽约束,配对交给解析器
+    "huggingface_hub>=0.26",
     "pyyaml>=6.0",
     "openai>=1.50",       # 验证器 LLM 兜底,走 OpenAI 兼容接口,provider 无关
     "rich>=13.0",
