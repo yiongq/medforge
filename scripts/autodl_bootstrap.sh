@@ -10,7 +10,9 @@ if [ -f /etc/network_turbo ]; then source /etc/network_turbo; fi
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 echo "== [2/4] uv + 项目依赖 =="
-command -v uv >/dev/null || pip install -q uv
+# 用官方独立安装器,不依赖镜像里的 pip/conda(非交互 shell 下 conda 不激活,pip 不在 PATH)
+export PATH="$HOME/.local/bin:$PATH"
+command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 echo "== [3/4] 训练/推理栈(不进 pyproject:仅 GPU 机需要,且含 CUDA 依赖) =="
