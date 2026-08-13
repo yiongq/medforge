@@ -144,6 +144,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="每套只跑前 N 题(冒烟用)")
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
+    # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
+    ap.add_argument("--max-tokens", type=int, default=8192)
     args = ap.parse_args()
 
     out_dir = ROOT / "reports" / "runs" / args.run_name
@@ -155,7 +157,8 @@ def main() -> None:
         scored = run_set(
             name.strip(), samples, out_dir,
             base_url=args.endpoint, model=args.model,
-            concurrency=args.concurrency, allow_llm_judge=not args.no_llm_judge,
+            concurrency=args.concurrency, max_tokens=args.max_tokens,
+            allow_llm_judge=not args.no_llm_judge,
         )
         tables.append((name.strip(), load_run(scored, args.run_name)))
 
