@@ -1,0 +1,282 @@
+<title>MedForge 讲义 · 第一阶段:备考基建与摸底考</title>
+<style>
+:root {
+  --paper: #FAF9F6;
+  --ink: #1F2933;
+  --muted: #5B6B77;
+  --accent: #0F766E;
+  --accent-soft: #0F766E1A;
+  --warm: #B45309;
+  --warm-soft: #B453091A;
+  --card: #FFFFFF;
+  --line: #D9DDD8;
+  --code-bg: #EEF1EE;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10181D;
+    --ink: #E6ECEF;
+    --muted: #93A5B1;
+    --accent: #35B8AB;
+    --accent-soft: #35B8AB22;
+    --warm: #E0A458;
+    --warm-soft: #E0A45822;
+    --card: #172129;
+    --line: #2C3A44;
+    --code-bg: #1D2A33;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10181D;
+  --ink: #E6ECEF;
+  --muted: #93A5B1;
+  --accent: #35B8AB;
+  --accent-soft: #35B8AB22;
+  --warm: #E0A458;
+  --warm-soft: #E0A45822;
+  --card: #172129;
+  --line: #2C3A44;
+  --code-bg: #1D2A33;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  line-height: 1.85;
+  margin: 0;
+  font-size: 16px;
+}
+main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.4rem 5rem; }
+h1, h2, h3 {
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+h1 { font-size: 2rem; margin: 0.4rem 0 0.6rem; }
+h2 { font-size: 1.45rem; margin: 0 0 0.8rem; }
+h3 { font-size: 1.1rem; margin: 1.6rem 0 0.5rem; }
+p { margin: 0.75rem 0; }
+.eyebrow {
+  font-size: 0.78rem; letter-spacing: 0.14em; color: var(--accent);
+  font-weight: 600; text-transform: uppercase;
+}
+.lede { color: var(--muted); font-size: 1.05rem; margin-top: 0.2rem; }
+.map {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 1.1rem 1.3rem; margin: 2rem 0;
+}
+.map ol { margin: 0.4rem 0 0; padding-left: 1.4rem; }
+.map li { margin: 0.3rem 0; }
+.map .here { color: var(--accent); font-weight: 600; }
+section.station { margin-top: 3.2rem; border-top: 1px solid var(--line); padding-top: 1.6rem; }
+.station-tag {
+  display: inline-block; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 0.15rem 0.7rem; border-radius: 3px; margin-bottom: 0.5rem;
+}
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; margin: 1rem 0; }
+th, td { border: 1px solid var(--line); padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+th { background: var(--accent-soft); font-weight: 600; }
+code {
+  font-family: "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 0.85em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 3px;
+}
+.case {
+  border: 1.5px dashed var(--warm); border-radius: 6px; background: var(--warm-soft);
+  padding: 0.9rem 1.2rem; margin: 1.4rem 0;
+}
+.case .case-label {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; color: var(--warm);
+}
+.case p { margin: 0.5rem 0; }
+.quiz {
+  background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0; padding: 0.8rem 1.2rem; margin: 1.8rem 0 0;
+}
+.quiz .quiz-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.14em; color: var(--accent); }
+.quiz ol { margin: 0.4rem 0 0.2rem; padding-left: 1.3rem; }
+.quiz li { margin: 0.35rem 0; }
+.analogy { color: var(--muted); font-style: normal; }
+.analogy::before { content: "◆ 比喻 "; color: var(--accent); font-weight: 600; font-size: 0.85em; }
+.kv { display: flex; gap: 2rem; flex-wrap: wrap; margin: 1rem 0; }
+.kv > div { min-width: 8rem; }
+.kv .num { font-size: 1.6rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.kv .cap { font-size: 0.82rem; color: var(--muted); }
+footer { margin-top: 3.5rem; border-top: 1px solid var(--line); padding-top: 1.2rem; color: var(--muted); font-size: 0.9rem; }
+a { color: var(--accent); }
+</style>
+
+<main>
+<div class="eyebrow">MedForge 讲义 · 01</div>
+<h1>第一阶段:备考基建与摸底考</h1>
+<p class="lede">第一阶段交付了一套能出数字、且数字可信的评测体系,和一份摸底成绩单。这份讲义解释它的每一块为什么这样设计。</p>
+
+<div class="map">
+<strong>项目全景(五阶段)</strong>
+<ol>
+<li class="here">① 备考基建 + 摸底考(本讲义,已完成)</li>
+<li>② 补课:SFT 训练 + DPO/GRPO 纠偏(今晚正在跑)</li>
+<li>③ 上线:vLLM 部署 + 压测 + 对比网页</li>
+<li>④ 二期:医疗工具调用 · 看图(VQA)</li>
+</ol>
+</div>
+
+<!-- ======================= 站 1 ======================= -->
+<section class="station">
+<span class="station-tag">第 1 站</span>
+<h2>数据层:题库、考卷,和「统一插座」</h2>
+
+<p>整个项目的原材料是五个公开数据集。按用途分两类:</p>
+
+<div class="tablewrap"><table>
+<tr><th>数据集</th><th>规模</th><th>角色</th><th>语言</th></tr>
+<tr><td>med-o1-verifiable</td><td>40,644</td><td><strong>刷题库</strong>:开放题+标准答案,DPO/GRPO 用</td><td>英文</td></tr>
+<tr><td>med-o1-sft-zh</td><td>20,171</td><td><strong>教材</strong>:带完整推理过程,SFT 用</td><td>中文</td></tr>
+<tr><td>CMExam</td><td>68,119</td><td><strong>主力考卷</strong>(执业医师真题,test 集 6,810 题带答案)</td><td>中文</td></tr>
+<tr><td>CMB</td><td>280 可用</td><td><strong>辅助考卷</strong>(官方扣答案防刷榜,只有 val 集能本地判)</td><td>中文</td></tr>
+<tr><td>MedXpertQA</td><td>2,450</td><td><strong>困难考卷</strong>(10 选项、防泄漏设计)</td><td>英文</td></tr>
+</table></div>
+
+<p class="analogy">数据集就是不同出版社的习题册:格式五花八门——有的选项写成列表、有的写成字典、答案有 <code>"C"</code> 也有 <code>"B,D"</code> 还有全角逗号的 <code>"B,D"</code>。直接拿来用,每换一本册子就得改一遍下游代码。</p>
+
+<p>工程解法是你熟悉的 <strong>adapter 模式</strong>:定义一个统一数据结构 <code>Sample</code>(相当于 TS 里的 interface:<code>id / question / options / gold</code>),每个数据源写一个几十行的转换器,把各家格式翻译成 <code>Sample</code>。下游的查重、评测、配对<strong>只认这一种形状</strong>——换数据源,下游一行不改。</p>
+
+<p>两个真实教训值得记住:</p>
+<ul>
+<li><strong>字段假设必须拿真数据验证。</strong>我最初猜 CMExam 选项是 <code>label/text</code> 字段,真数据是 <code>key/value</code>——凡是「猜」的结构,第一次碰真数据就碎。</li>
+<li><strong>转换器要在字段缺失时大声报错,</strong>而不是产出一堆空题干的静默坏数据。安静的坏数据比响亮的崩溃危险一百倍。</li>
+</ul>
+
+<div class="quiz">
+<span class="quiz-label">查房提问</span>
+<ol>
+<li>为什么「教材」(带推理过程)和「刷题库」(只有答案)要分开用于不同的训练阶段?</li>
+<li>CMB 官方为什么故意不公开 test 集答案?这对我们的评测设计造成了什么影响?</li>
+</ol>
+</div>
+</section>
+
+<!-- ======================= 站 2 ======================= -->
+<section class="station">
+<span class="station-tag">第 2 站</span>
+<h2>防作弊:去污染为什么是「作废级」步骤</h2>
+
+<p>致命场景:训练题库是从考试真题<strong>改写</strong>来的(med-o1 官方就是这么造的题)。如果一道正式考题的原文或改写版混进了训练数据,模型考这道题就是「背过答案」——涨分是假的,整个项目的核心数字瞬间作废。</p>
+
+<p class="analogy">查重就像比对指纹:把每道题去掉标点空格、切成连续 10 个字的小片段(「10-gram」),两道题共享的片段越多越可疑。覆盖率 ≥80% 判「污染」直接剔除,≥30% 记「存疑」进报告供人工抽看。</p>
+
+<p>三个真实数字:61K 训练题 × 9.5K 考题的全量互查,20 秒跑完(倒排索引);真污染 <strong>20 处</strong>(人工复核确认,有考题一字不差出现在题库里),剔除 17 条;835 条超短题干(如「甘味的作用特点是」)如实标注「字面查重无能为力」——<strong>报告里连查不了的都要公示</strong>,这是数字可信的一部分。</p>
+
+<div class="case">
+<span class="case-label">踩坑病历 · FDP 误报事件</span>
+<p><strong>症状:</strong>第一版扫描报告「2,731 条训练题撞考题」,数字大得吓人。</p>
+<p><strong>确诊:</strong>人工抽查发现,考题「FDP」只有 3 个字符,而英文训练题里 "doses o<strong>f DP</strong>T" 去掉空格后恰好包含 "fdp"——为短题干开的子串匹配通道,本质是台误报制造机。</p>
+<p><strong>处置:</strong>砍掉子串通道;修正后真实污染 20 处。<strong>教训:任何自动化审查的第一批结果,必须人工抽查后才能相信。</strong>「先误报→复核→修正」的过程本身写进了报告,比一次跑对更有说服力。</p>
+</div>
+
+<div class="quiz">
+<span class="quiz-label">查房提问</span>
+<ol>
+<li>为什么查重方向是「考题被训练题覆盖多少」而不是反过来?(提示:训练题往往比考题长)</li>
+<li>「存疑」档为什么不直接剔除,而是进报告?</li>
+</ol>
+</div>
+</section>
+
+<!-- ======================= 站 3 ======================= -->
+<section class="station">
+<span class="station-tag">第 3 站</span>
+<h2>判卷员:验证器与它的上岗考试</h2>
+
+<p>模型答题是写一大段推理文字,机器要从中认出「它最终选了什么」再和标准答案比对。这个「判卷员」是全项目的灵魂部件——它管两件事:评测打分,和将来 DPO 刷题时分拣对错解。<strong>判卷错一次,污染的是训练数据本身。</strong></p>
+
+<p>结构是两层:<strong>规则层</strong>(正则抽取「答案:C」这类明确声明,免费、快)+ <strong>LLM 兜底</strong>(规则拿不准的疑难卷,调 DeepSeek 判,一次几厘钱)。规则层的铁律是<strong>宁可弃权、不可抽错</strong>——弃权的代价是一次 LLM 调用,抽错的代价是一条毒数据。</p>
+
+<p>判卷员不能自封上岗,要考试:抽 200 题,人工(强模型代理+人工抽检)先判一遍做金标准,再看判卷员和金标准的一致率。<strong>阈值 95%,实测规则层 100%、加 LLM 兜底 96.5%,通过。</strong>7 处分歧全偏「判卷员更严」——方向安全(错杀损失一条数据,放过才产毒数据)。</p>
+
+<div class="case">
+<span class="case-label">踩坑病历 · 判卷员三连</span>
+<p><strong>①「B超」事件:</strong>正则见字母就抓,「答案是 B超检查」被判成选了 B。修法:字母后面紧跟汉字/字母/数字的不算选项。</p>
+<p><strong>②「不应选 C」事件:</strong>否定句被当成答案声明,还压过了前面的真答案。修法:否定前缀直接不算声明。</p>
+<p><strong>③ A-J 事件(最贵的一课):</strong>MedXpertQA 是 10 选项题(A-J),判卷员只认 A-H——答 I/J 的全被记错。冒烟考显示 5%,修复后同一批答卷重判出 <strong>21.6%,分数翻了四倍</strong>。判卷 bug 的破坏力,没有比这更直观的例子。</p>
+</div>
+
+<p>还有一个精妙的设计点:同一个判卷员,在两个场景刻意用<strong>不同的脾气</strong>。评测时「宁弃权不判错」;DPO 配对时弃权产不出「错解」,所以分层处理——声明了答案但不匹配的交 LLM 仲裁,连声明都没有的丢弃(没结论的解进负例,教给模型的是「别写结论」,是毒信号)。</p>
+
+<div class="quiz">
+<span class="quiz-label">查房提问</span>
+<ol>
+<li>为什么判卷员的校准集要从 validation 集抽题,刻意避开 test 集?</li>
+<li>「弃权」和「判错」在评测与配对两个场景里的代价分别是什么?</li>
+</ol>
+</div>
+</section>
+
+<!-- ======================= 站 4 ======================= -->
+<section class="station">
+<span class="station-tag">第 4 站</span>
+<h2>考试系统:数字怎样才可信</h2>
+
+<p>摸底成绩单(协议 v1):</p>
+<div class="kv">
+<div><div class="num">71.1%</div><div class="cap">CMExam(6,810 题)</div></div>
+<div><div class="num">59.6%</div><div class="cap">CMB-val(280 题)</div></div>
+<div><div class="num">21.6%</div><div class="cap">MedXpertQA(2,450 题)</div></div>
+</div>
+
+<p>三套考卷各司其职:CMExam 量大、中文、是主战场;CMB-val 只有 280 题,当交叉参考;MedXpertQA 是给前沿大模型出的困难卷(它们也就 20-40%),4B 小模型 21.6% 符合身位——<strong>它的价值是留出最大的涨分空间</strong>。</p>
+
+<h3>为什么 20 题的 80% 不可信</h3>
+<p>冒烟考 20 题得 80%,置信区间是 [58%, 92%]——意思是真实水平在这个范围里都有可能,这个数字几乎没有信息量。6,810 题的 71.1%,区间收窄到 [70.0%, 72.1%]。<strong>这就是为什么报告里每个数字都带区间:没有区间的百分数,等于没说样本量的民意调查。</strong>(区间用 Wilson 公式算,小样本、高分段不失真。)</p>
+
+<h3>两条诚实口径</h3>
+<ul>
+<li><strong>弃权计错:</strong>判卷员判不了的答卷,进分母、不给分,弃权率单独公示。否则输出格式混乱的模型反而白拿分。</li>
+<li><strong>协议要打版本号:</strong>v1 的答题上限 2,048 token,爱思考的模型在难题上被「掐断在半路」还没写答案——所以 v1 分数是保守下界,这一点直接写在报告里。v2(8,192)已就绪,训练前后都用 v2,保证对比公平。<strong>发现缺陷不掩盖、不返工重测(那会引入另一种偏差),而是标注、换版本、同协议对比</strong>——这是评测工程的成年人做法。</li>
+</ul>
+
+<div class="quiz">
+<span class="quiz-label">查房提问</span>
+<ol>
+<li>如果训练前用 v1 协议、训练后用 v2 协议,得出的「涨分」为什么不可信?</li>
+<li>为什么弃权要计错而不是从分母里剔除?</li>
+</ol>
+</div>
+</section>
+
+<!-- ======================= 站 5 ======================= -->
+<section class="station">
+<span class="station-tag">第 5 站</span>
+<h2>租卡实战:GPU、驱动链与花掉的 20 块钱</h2>
+
+<p>什么时候需要 GPU?一句话:<strong>模型本人要出场的时候</strong>——做题(推理)和补课(训练)都要;数据加工、查重、判分分析都不要,全在本地白嫖。</p>
+
+<p>版本链是这次最贵的一课:<strong>模型新 → 软件必须新 → 驱动必须新</strong>。Qwen3.5 是 2026 年 3 月的模型,要新版 transformers 才认识;新版 PyTorch 默认按 CUDA 13 编译;CUDA 13 要驱动 580+。第一台机器驱动 550(只支持到 CUDA 12.4),从根上无解,12 块钱学费换来「选机器先看驱动列」这条铁律。</p>
+
+<p>其余的坑各修一次、终身免疫(全部固化进脚本和 <code>docs/gpu-租卡实操笔记.md</code>):学术加速代理会截断大文件下载;镜像的 conda 环境在脚本里不生效;训练框架和推理框架装同一个环境会互相拖后腿(连锁降级到旧版);锁文件是版本唯一事实源,绕过它改安装层会被悄悄回滚;24G 显存装不下 batch=4 就减半批次、翻倍累积,数学上完全等价。</p>
+
+<p>账本:两台机器合计约 20 元,其中 12 元是驱动死结的学费。GPU 该干的活(9,540 份答卷)一份没少拿到。</p>
+
+<div class="quiz">
+<span class="quiz-label">查房提问</span>
+<ol>
+<li>「batch 减半、梯度累积翻倍」为什么不改变训练的数学结果?它用什么换了什么?</li>
+<li>为什么训练环境(ms-swift)和推理环境(vLLM)必须分开装?</li>
+</ol>
+</div>
+</section>
+
+<!-- ======================= 尾 ======================= -->
+<section class="station">
+<span class="station-tag">通关</span>
+<h2>把五站串成一句话</h2>
+<p>「先建<strong>可信的尺子</strong>——统一的数据层、查过重的题库、校准过的判卷员、带置信区间和版本号的考试协议——然后才开始训练。因为训练前后的<strong>差值</strong>才是项目的产出,而差值的可信度,取决于尺子的可信度。」</p>
+
+<footer>
+配套代码与报告:github.com/yiongq/medforge · 讲义随仓库更新
+</footer>
+</section>
+</main>
