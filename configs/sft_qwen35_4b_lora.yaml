@@ -18,8 +18,8 @@ lr_scheduler_type: cosine
 warmup_ratio: 0.03       # 全参惯例直接沿用
 
 num_train_epochs: 2      # 【暂定】SFT 蒸馏数据惯例 2-3 epoch,看 val loss 定
-per_device_train_batch_size: 4
-gradient_accumulation_steps: 4   # 有效 batch 16
+per_device_train_batch_size: 2  # 4 时 24G OOM(思考样本长);减半后梯度累积补回,有效 batch 不变
+gradient_accumulation_steps: 8   # 有效 batch 16
 max_length: 4096         # CoT 样本长;超长截断率要在训练日志里确认 <1%
 torch_dtype: bfloat16
 gradient_checkpointing: true     # 24G 卡上换显存的标准手段
