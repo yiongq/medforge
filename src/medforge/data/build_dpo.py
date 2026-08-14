@@ -159,7 +159,7 @@ def main() -> None:
             model=args.model,
             messages=[{"role": "user", "content": PROMPT.format(question=s.render_question())}],
             temperature=1.0,   # 采样要多样性:太低全对/全错都配不成对
-            max_tokens=6144,   # 基座原生思考很长,2048 会掐断在结论前(SFT 负结果后改为基座直采)
+            max_tokens=8192,   # 6144 实测截断率 51%(半数解法没写到答案就被掐),与评测协议 v2 对齐
             n=args.k_samples,
         )
         return s.id, [c.message.content or "" for c in resp.choices]
