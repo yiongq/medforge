@@ -24,6 +24,7 @@ max_length: 6144         # DPO 显存账:fp32 全词表概率 ≈ 长度×词表
 truncation_strategy: delete  # 超长不截断而是丢弃:截半的坏解会污染偏好信号
 torch_dtype: bfloat16
 gradient_checkpointing: true
+use_liger_kernel: true   # 融合算子免实体化全词表概率——长序列 DPO 的显存正解(6144+batch1 仍 OOM 实测)
 seed: 42
 
 dataset: data/processed/dpo_pairs.jsonl
