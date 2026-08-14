@@ -19,7 +19,9 @@ num_train_epochs: 1      # 偏好数据过多轮极易过拟合,业界惯例 1 e
 
 per_device_train_batch_size: 1   # DPO 同时前向 chosen/rejected 且解法长达 8K token,批次只能为 1
 gradient_accumulation_steps: 16
-max_length: 10240        # 解法按 8192 采样(与协议 v2 对齐)+ 题干,4096 会把全部对子拦在门外(实测)
+max_length: 6144         # DPO 显存账:fp32 全词表概率 ≈ 长度×词表×4B×2份,10240 实测 OOM(要 13GB);
+                         # 6144 容纳绝大多数对子(chosen 本就取最短对解),超长对子直接剔除
+truncation_strategy: delete  # 超长不截断而是丢弃:截半的坏解会污染偏好信号
 torch_dtype: bfloat16
 gradient_checkpointing: true
 seed: 42
