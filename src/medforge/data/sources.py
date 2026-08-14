@@ -19,6 +19,7 @@ RAW = ROOT / "data" / "raw"
 TRAIN_SOURCES: dict[str, tuple[str, str, str]] = {
     "med-o1-verifiable": ("med-o1-verifiable", "med-o1-verifiable.train.jsonl", ""),
     "med-o1-sft-zh": ("med-o1-sft-zh", "med-o1-sft-zh.train.jsonl", ""),
+    "med-r1-zh": ("med-r1-zh", "med-r1-zh.train.jsonl", ""),
 }
 EVAL_SOURCES: dict[str, tuple[str, str, str]] = {
     "cmexam": ("cmexam", "cmexam.test.jsonl", "test"),

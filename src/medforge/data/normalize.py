@@ -144,12 +144,27 @@ def norm_medxpertqa(rows: Iterable[dict[str, Any]]) -> Iterator[Sample]:
         )
 
 
+def norm_med_r1_zh(rows: Iterable[dict[str, Any]]) -> Iterator[Sample]:
+    """Medical-R1-Distill-Data-Chinese(2025,R1 蒸馏中文)。
+    实测字段名真的带括号注记:'reasoning (reasoning_content)' / 'response (content)'。"""
+    for i, row in enumerate(rows):
+        _require(row, "question", "reasoning (reasoning_content)", "response (content)")
+        yield Sample(
+            id=f"med-r1-zh-{i}",
+            source="med-r1-zh",
+            question=str(row["question"]).strip(),
+            gold=str(row["response (content)"]).strip(),
+            cot=str(row["reasoning (reasoning_content)"]).strip(),
+        )
+
+
 # 统一签名 callable(rows, split) -> Iterator[Sample]:注册表消费方(build 管线)不关心
 # 各源是否需要 split,差异全部吸收在 lambda 里
 ADAPTERS = {
     "med-o1-verifiable": lambda rows, split="": norm_med_o1_verifiable(rows),
     "med-o1-sft-zh": lambda rows, split="": norm_med_o1_sft_zh(rows),
     "cmexam": norm_cmexam,
+    "med-r1-zh": lambda rows, split="": norm_med_r1_zh(rows),
     "cmb-val": lambda rows, split="": norm_cmb_val(rows),
     "medxpertqa": lambda rows, split="": norm_medxpertqa(rows),
 }

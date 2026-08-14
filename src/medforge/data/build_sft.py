@@ -28,36 +28,35 @@ PROCESSED = ROOT / "data" / "processed"
 SEED = 42
 
 
-def med_rows() -> list[dict]:
-    """med-o1-sft-zh → 消息格式。以去污染后的题池为准(train_pool 已剔撞题样本)。"""
+def med_rows(source: str) -> list[dict]:
+    """任一带 CoT 的训练源 → 消息格式。以去污染后的题池为准(train_pool 已剔撞题样本)。"""
+    from medforge.data.sources import load_source
+
     pool_ids = set()
     with (PROCESSED / "train_pool.jsonl").open(encoding="utf-8") as f:
         for line in f:
             s = json.loads(line)
-            if s["source"] == "med-o1-sft-zh":
+            if s["source"] == source:
                 pool_ids.add(s["id"])
     rows = []
     seen: set[tuple[str, str]] = set()
     n_dup = 0
-    with (RAW / "med-o1-sft-zh.train.jsonl").open(encoding="utf-8") as f:
-        for i, line in enumerate(f):
-            if f"med-o1-sft-zh-{i}" not in pool_ids:
-                continue  # 去污染剔除的样本
-            r = json.loads(line)
-            assistant = f"<think>\n{r['Complex_CoT'].strip()}\n</think>\n\n{r['Response'].strip()}"
-            user = r["Question"].strip()
-            # 上游数据集实测自带 ~3000 组逐字节重复(占 30%):不去重等于给部分题双倍加权
-            key = (user, assistant)
-            if key in seen:
-                n_dup += 1
-                continue
-            seen.add(key)
-            rows.append({"messages": [
-                {"role": "user", "content": user},
-                {"role": "assistant", "content": assistant},
-            ]})
+    for smp in load_source(source):
+        if smp.id not in pool_ids or not smp.cot:
+            continue  # 去污染剔除,或无 CoT 的样本
+        assistant = f"<think>\n{smp.cot}\n</think>\n\n{smp.gold}"
+        # 上游数据集实测自带成组逐字节重复(med-o1-zh 占 30%):不去重等于双倍加权
+        key = (smp.question, assistant)
+        if key in seen:
+            n_dup += 1
+            continue
+        seen.add(key)
+        rows.append({"messages": [
+            {"role": "user", "content": smp.question},
+            {"role": "assistant", "content": assistant},
+        ]})
     if n_dup:
-        print(f"[build_sft] 医疗侧内容去重:剔 {n_dup} 条重复")
+        print(f"[build_sft] {source} 内容去重:剔 {n_dup} 条重复")
     return rows
 
 
@@ -91,12 +90,14 @@ def mix(med: list[dict], general: list[dict], ratio: float, seed: int = SEED) ->
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--general-ratio", type=float, default=0.15)
+    ap.add_argument("--source", default="med-o1-sft-zh", help="训练源(需已在 TRAIN_SOURCES 注册并跑过 build 去污染)")
+    ap.add_argument("--out", default="sft_train.jsonl")
     args = ap.parse_args()
 
-    med = med_rows()
+    med = med_rows(args.source)
     general = general_rows()
     out = mix(med, general, args.general_ratio)
-    dst = PROCESSED / "sft_train.jsonl"
+    dst = PROCESSED / args.out
     with dst.open("w", encoding="utf-8") as f:
         for r in out:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")

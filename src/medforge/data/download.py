@@ -31,6 +31,9 @@ DATASETS: dict[str, tuple[str, list[str]]] = {
     # 通用中文指令(防灾难性遗忘的 replay 混料,实测字段 conversations[{from,value}]):
     # 与医疗数据同发布方,5 万条 GPT-4 生成
     "alpaca-zh": ("FreedomIntelligence/alpaca-gpt4-chinese", ["train"]),
+    # 新教材(2025,R1 蒸馏):与 med-o1-sft-zh 同发布方同类题,唯一变量=老师
+    # 从 GPT-4o(2024)换成 DeepSeek-R1——老教材降智假设的控制变量实验
+    "med-r1-zh": ("FreedomIntelligence/Medical-R1-Distill-Data-Chinese", ["train"]),
 }
 
 # 需要指定 config 的数据源
