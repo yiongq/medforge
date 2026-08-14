@@ -46,8 +46,11 @@ def load_questions(n: int) -> list[Sample]:
             s = json.loads(line)
             if s["source"] == "med-o1-verifiable":
                 pool.append(Sample(**s))
+    # 前缀稳定抽样:先按固定 seed 抽满上限再取前 n——小规模试跑与后续扩量
+    # 抽到的是同一批题的前缀,断点缓存全程有效
     rng = random.Random(SEED)
-    return rng.sample(pool, min(n, len(pool)))
+    full = rng.sample(pool, min(8000, len(pool)))
+    return full[: min(n, len(full))]
 
 
 def classify_solution(sample: Sample, sol: str, llm_arbitrate: bool) -> str:
@@ -154,7 +157,7 @@ def main() -> None:
             model=args.model,
             messages=[{"role": "user", "content": PROMPT.format(question=s.render_question())}],
             temperature=1.0,   # 采样要多样性:太低全对/全错都配不成对
-            max_tokens=2048,
+            max_tokens=6144,   # 基座原生思考很长,2048 会掐断在结论前(SFT 负结果后改为基座直采)
             n=args.k_samples,
         )
         return s.id, [c.message.content or "" for c in resp.choices]

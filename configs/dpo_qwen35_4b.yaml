@@ -3,10 +3,10 @@
 # 运行:swift rlhf configs/dpo_qwen35_4b.yaml   (yaml 是位置参数;rlhf_type 已写在本文件内)
 # 参数名以 ms-swift 锁定版本的官方文档为准
 
-# SFT LoRA 合并(已核实源码):swift export --adapters <ckpt> --merge_lora true \
-#   --output_dir output/sft_qwen35_4b_lora/merged
-# 用 --output_dir 一步得到固定路径;不传时产物在 v<x>-<时间戳>/checkpoint-<step>-merged,别靠猜
-model: output/sft_qwen35_4b_lora/merged
+# 起点改为基座(W2 实测:med-o1-zh 蒸馏 SFT 使三卷全跌 ~11pp——2024 年浅层 CoT
+# 覆盖了 2026 思考型基座的原生深推理,负结果存档于 reports;DPO 直接在基座上
+# 用「它自己的对/错解」纠偏,保留原生思考风格)
+model: Qwen/Qwen3.5-4B
 tuner_type: lora
 target_modules: all-linear
 lora_rank: 64
