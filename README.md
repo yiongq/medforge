@@ -19,6 +19,15 @@
 
 部署侧:vLLM + FP8/AWQ 压测曲线(TTFT / 吞吐 vs 并发)见 `reports/`(W3)。
 
+## 产物
+
+| 在哪 | 是什么 |
+|---|---|
+| [🤗 fang04/medforge-qwen3.5-4b-dpo](https://huggingface.co/fang04/medforge-qwen3.5-4b-dpo) | 定稿模型权重(Qwen3.5-4B + 验证器驱动 DPO) |
+| [🤗 fang04/medforge-artifacts](https://huggingface.co/datasets/fang04/medforge-artifacts) | 自采样原始解法(10 GPU 小时)、偏好对、判卷标签缓存、四方案完整答卷 |
+| `web/` | 回放模式对照台:同题四方案并排、思考可折叠、成绩板带置信区间 |
+| `reports/` | 去污染报告 · 验证器校准报告 · 各 run 判分与汇总 |
+
 ## 方法
 
 复刻 [HuatuoGPT-o1](https://github.com/FreedomIntelligence/HuatuoGPT-o1)(ACL 2025)的核心思路并缩小到单卡规模:
