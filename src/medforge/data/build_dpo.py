@@ -38,7 +38,7 @@ SEED = 42
 PROMPT = "你是医学助手,回答下面的问题。先给出推理过程,最后一行以「最终答案:」开头给出结论。\n\n{question}"
 
 
-def load_questions(n: int) -> list[Sample]:
+def load_questions(n: int, offset: int = 0) -> list[Sample]:
     """从去污染题池抽可验证开放题。固定 seed:重跑抽到同一批,断点续采才成立。"""
     pool = []
     with (PROCESSED / "train_pool.jsonl").open(encoding="utf-8") as f:
@@ -50,7 +50,8 @@ def load_questions(n: int) -> list[Sample]:
     # 抽到的是同一批题的前缀,断点缓存全程有效
     rng = random.Random(SEED)
     full = rng.sample(pool, min(8000, len(pool)))
-    return full[: min(n, len(full))]
+    # offset 支持多机分段采样:同一 seed 的固定洗牌序列上切片,各机不重不漏
+    return full[offset : offset + n]
 
 
 def classify_solution(sample: Sample, sol: str, llm_arbitrate: bool) -> str:
@@ -118,6 +119,7 @@ def main() -> None:
     ap.add_argument("--endpoint", required=True)
     ap.add_argument("--model", required=True)
     ap.add_argument("--n-questions", type=int, default=8000)  # 【暂定】8K 题 × K 解,GPU ~2-3 小时
+    ap.add_argument("--offset", type=int, default=0, help="分段起点(多机拆采样用,如机2从1500起)")
     ap.add_argument("--k-samples", type=int, default=6)       # 【暂定】需要对错并存,6 解命中率与成本的折中
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--no-llm-arbitrate", action="store_true", help="声明不符不走 LLM 仲裁,直接判错")
@@ -137,7 +139,7 @@ def main() -> None:
 
     from openai import OpenAI
 
-    questions = load_questions(args.n_questions)
+    questions = load_questions(args.n_questions, args.offset)
     raw_file = PROCESSED / "dpo_samples.jsonl"   # 原始采样落盘:断点续采 + 可审计
     done: dict[str, list[str]] = {}
     if raw_file.exists():
