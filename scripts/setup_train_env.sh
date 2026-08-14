@@ -7,7 +7,7 @@ export PATH="$HOME/.local/bin:$PATH"
 unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
 
 SYS_PY="$(ls /root/miniconda3/bin/python3.12 2>/dev/null || command -v python3.12)"
-uv venv ~/swift-env --python "$SYS_PY"
+[ -d ~/swift-env ] || uv venv ~/swift-env --python "$SYS_PY"  # 幂等:新版 uv 对已存在的 venv 会报错而非覆盖
 # TORCH_BACKEND=cu129 时走 cu129 变体(驱动只到 CUDA 12.x 的主机用;默认 cu130)
 UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple" \
   uv pip install --python ~/swift-env/bin/python ${TORCH_BACKEND:+--torch-backend=$TORCH_BACKEND} -U "ms-swift[swanlab]" "qwen_vl_utils>=0.0.14" torchvision flash-linear-attention liger-kernel  # Qwen3.5 硬依赖:多模态模板+线性注意力内核;liger 顺装
