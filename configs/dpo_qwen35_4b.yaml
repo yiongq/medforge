@@ -17,9 +17,9 @@ beta: 0.1                # DPO 论文默认;【暂定】W2 对 0.05/0.1/0.3 做�
 learning_rate: 5.0e-6    # DPO 惯例比 SFT 低一个数量级以上,防把 SFT 学到的能力洗掉
 num_train_epochs: 1      # 偏好数据过多轮极易过拟合,业界惯例 1 epoch
 
-per_device_train_batch_size: 2   # DPO 同时前向 chosen/rejected,显存按双份算
-gradient_accumulation_steps: 8
-max_length: 4096
+per_device_train_batch_size: 1   # DPO 同时前向 chosen/rejected 且解法长达 8K token,批次只能为 1
+gradient_accumulation_steps: 16
+max_length: 10240        # 解法按 8192 采样(与协议 v2 对齐)+ 题干,4096 会把全部对子拦在门外(实测)
 torch_dtype: bfloat16
 gradient_checkpointing: true
 seed: 42
