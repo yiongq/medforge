@@ -19,9 +19,10 @@ num_train_epochs: 1      # 偏好数据过多轮极易过拟合,业界惯例 1 e
 
 per_device_train_batch_size: 1   # DPO 同时前向 chosen/rejected 且解法长达 8K token,批次只能为 1
 gradient_accumulation_steps: 16
-max_length: 6144         # DPO 显存账:fp32 全词表概率 ≈ 长度×词表×4B×2份,10240 实测 OOM(要 13GB);
+max_length: 8192         # 80G 卡余量允许;DPO 显存账:fp32 全词表概率 ≈ 长度×词表×4B×2份,10240 实测 OOM(要 13GB);
                          # 6144 容纳绝大多数对子(chosen 本就取最短对解),超长对子直接剔除
 truncation_strategy: delete  # 超长不截断而是丢弃:截半的坏解会污染偏好信号
+lazy_tokenize: false     # 关懒加载:超长样本在开训前统一剔除并打印数量,而不是训到 41% 才炸(实测)
 torch_dtype: bfloat16
 gradient_checkpointing: true
 use_liger_kernel: true   # 融合算子免实体化全词表概率——长序列 DPO 的显存正解(6144+batch1 仍 OOM 实测)
