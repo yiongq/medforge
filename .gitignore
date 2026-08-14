@@ -28,3 +28,9 @@ dist/
 
 # 评测原始作答体积大(73MB),不进 git:scored/summary 才是可追溯产物
 reports/runs/*/*.outputs.jsonl
+
+# 前台构建产物与依赖
+web/node_modules/
+web/dist/
+# 回放数据由 export_web 生成(1.8MB,可重建)
+web/public/replay.json
