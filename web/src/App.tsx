@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Replay } from './types'
+import type { Bench, Replay } from './types'
 import { ScoreBoard } from './components/ScoreBoard'
 import { AnswerCard } from './components/AnswerCard'
+import { BenchCharts } from './components/BenchCharts'
+import { LivePanel } from './components/LivePanel'
 
 const BUCKET_ORDER = ['regression', 'dpo_fix', 'mixed', 'all_wrong', 'all_correct']
 
@@ -11,12 +13,18 @@ export default function App() {
   const [setFilter, setSetFilter] = useState<string>('all')
   const [bucketFilter, setBucketFilter] = useState<string>('all')
   const [idx, setIdx] = useState(0)
+  const [benches, setBenches] = useState<Bench[] | null>(null)
 
   useEffect(() => {
     fetch('replay.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(setData)
       .catch((e) => setErr(String(e)))
+    // 压测数据是可选的:还没跑过部署时,这一节自动隐藏而不是报错
+    fetch('bench.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => b && setBenches(b))
+      .catch(() => undefined)
   }, [])
 
   const buckets = useMemo(() => {
@@ -131,6 +139,24 @@ export default function App() {
             </div>
           </>
         )}
+      </section>
+
+      {benches && benches.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2>部署压测</h2>
+            <span className="note">同一份权重的 BF16 与 FP8 两档,真实题面负载下的并发扫描</span>
+          </div>
+          <BenchCharts benches={benches} />
+        </section>
+      )}
+
+      <section>
+        <div className="section-head">
+          <h2>现场提问</h2>
+          <span className="note">连到一台跑着 vLLM 的机器,用你自己的题考它</span>
+        </div>
+        <LivePanel />
       </section>
 
       <footer>

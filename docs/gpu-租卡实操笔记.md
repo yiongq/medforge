@@ -54,3 +54,18 @@ W1 底分评测在两台 4090 上共踩 10+ 坑的完整复盘。每条都真实
   必要时把 reasoning_content 拼回,保持一致
 - LoRA 合并用固定路径:swift export --adapters <ckpt> --merge_lora true --output_dir output/sft_qwen35_4b_lora/merged
 - build_dpo 默认要求 judge 已配置(fail-fast 会拦),GPU 机上记得放 .env
+
+## W3 部署压测清单
+
+一次租卡跑完(建议 4090/5090,半天足够):
+
+```bash
+bash scripts/autodl_bootstrap.sh                      # 推理栈
+bash scripts/serve_bench.sh fang04/medforge-qwen3.5-4b-dpo "RTX 5090"
+# 产物:reports/bench-{bf16,fp8}.json · reports/deployment.md · web/public/bench.json
+```
+
+- **live 模式要让浏览器连得上**:AutoDL 走「自定义服务」端口(把 vLLM 起在 6006),
+  或本机 `ssh -L 8000:127.0.0.1:8000 -p <port> root@<host>` 建隧道后填 `http://127.0.0.1:8000/v1`
+- vLLM 默认放行跨域,浏览器可直连,不需要额外反代
+- 压测前确认没有别的进程占显存(`nvidia-smi`),否则 FP8 那一档会因残留显存起不来

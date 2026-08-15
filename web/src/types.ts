@@ -51,3 +51,24 @@ export interface Replay {
   summary: ScoreRow[]
   questions: Question[]
 }
+
+export interface BenchLevel {
+  concurrency: number
+  requests: number
+  failed: number
+  ttft_p50?: number
+  ttft_p95?: number
+  tpot_p50?: number
+  tpot_p95?: number
+  output_tok_s?: number
+  req_per_s?: number
+  wall_s?: number
+}
+
+export interface Bench {
+  label: string
+  model: string
+  gpu: string
+  max_tokens: number
+  levels: BenchLevel[]
+}
