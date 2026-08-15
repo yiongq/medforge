@@ -17,7 +17,9 @@
 
 **W2 核心发现**([完整报告](reports/w2-post-training-ablation.md)):对思考型基座(Qwen3.5),蒸馏 SFT 全线降分——换更强的老师(2024 GPT-4o → 2025 R1)能大幅止损(主力卷 -11.5pp → -3.3pp),但困难卷两代教材同伤(25.1% → 13.6%),表明「抄外部笔记」本身即破坏原生深推理,与教材质量无关。协议注记:v2 = 8192 tokens + 固定种子抽样卷(cmexam 2000 / medxpertqa 1000 / cmb 全量),v1 全量存档见 reports/runs/base/。DPO 三卷均与基座持平(差值落在置信区间内),但逐题转移矩阵显示 CMExam 有 413/2000 题答案翻转(修好 206、弄坏 207)——训练确实改变了模型,方向却近乎随机。
 
-部署侧:vLLM + FP8/AWQ 压测曲线(TTFT / 吞吐 vs 并发)见 `reports/`(W3)。
+**部署侧**(RTX 5090 · vLLM · [完整报告](reports/deployment.md)):FP8 相比 BF16 峰值吞吐
+5,810 vs 4,822 tok/s(+20%),且并发 64 时首字延迟更低(369 vs 455 ms)——同一份权重,仅数值精度不同。
+七档并发(1→64)全程零失败,吞吐随并发近线性增长,说明单卡远未饱和。
 
 ## 产物
 
@@ -25,7 +27,8 @@
 |---|---|
 | [🤗 fang04/medforge-qwen3.5-4b-dpo](https://huggingface.co/fang04/medforge-qwen3.5-4b-dpo) | 定稿模型权重(Qwen3.5-4B + 验证器驱动 DPO) |
 | [🤗 fang04/medforge-artifacts](https://huggingface.co/datasets/fang04/medforge-artifacts) | 自采样原始解法(10 GPU 小时)、偏好对、判卷标签缓存、四方案完整答卷 |
-| `web/` | 回放模式对照台:同题四方案并排、思考可折叠、成绩板带置信区间 |
+| **[medforge.yiongspace.com](https://medforge.yiongspace.com)** | 在线实验台:同题四方案并排、成绩板、压测曲线、live 现场提问 |
+| `web/` | 上述站点源码(Vite + React,零运行时依赖) |
 | `reports/` | 去污染报告 · 验证器校准报告 · 各 run 判分与汇总 |
 
 ## 方法
