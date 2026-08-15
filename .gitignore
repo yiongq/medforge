@@ -32,5 +32,5 @@ reports/runs/*/*.outputs.jsonl
 # 前台构建产物与依赖
 web/node_modules/
 web/dist/
-# 回放数据由 export_web 生成(1.8MB,可重建)
-web/public/replay.json
+# 回放数据破例入库(见下 !):Vercel 构建时不跑 Python,拉不到数据页面就是空的;
+# 3.2MB 一次性成本换「静态站零后端」的部署形态,值
