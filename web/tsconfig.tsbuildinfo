@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/lib.ts","./src/main.tsx","./src/types.ts","./src/components/answercard.tsx","./src/components/benchcharts.tsx","./src/components/livepanel.tsx","./src/components/scoreboard.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/lib.ts","./src/main.tsx","./src/types.ts","./src/components/answercard.tsx","./src/components/benchcharts.tsx","./src/components/livepanel.tsx","./src/components/scorematrix.tsx"],"version":"5.9.3"}

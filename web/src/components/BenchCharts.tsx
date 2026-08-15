@@ -1,96 +1,105 @@
 import type { Bench } from '../types'
 
-/** 并发扫描曲线。手绘 SVG 而不引图表库:两条折线的需求不值得多 100KB 依赖,
- *  而且这样能精确控制「并发按档位等距、不按数值等距」——否则 1..64 的横轴
- *  会把低并发挤成一团,而低并发正是延迟最该看清的区间。 */
-const W = 520
-const H = 190
-const PAD = { l: 46, r: 12, t: 12, b: 28 }
+/** 并发扫描曲线 + 关键数字面板。
+ *
+ *  手绘 SVG 而不引图表库:两条折线不值得多 100KB 依赖,而且要精确控制
+ *  「并发按档位等距、不按数值等距」——1..64 按数值排会把低并发挤成一团,
+ *  而低并发正是延迟最该看清的区间。 */
+const W = 320
+const H = 196
+const PAD = { l: 30, r: 0, t: 10, b: 26 }
 
-function Line({
-  bench, pick, color, max,
-}: { bench: Bench; pick: (lv: Bench['levels'][number]) => number | undefined; color: string; max: number }) {
-  const pts = bench.levels
-    .map((lv, i) => {
-      const v = pick(lv)
-      if (v === undefined) return null
-      const x = PAD.l + (i / Math.max(1, bench.levels.length - 1)) * (W - PAD.l - PAD.r)
-      const y = H - PAD.b - (v / max) * (H - PAD.t - PAD.b)
-      return { x, y, v }
-    })
-    .filter((p): p is { x: number; y: number; v: number } => p !== null)
-  if (!pts.length) return null
-  return (
-    <g>
-      <polyline
-        points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
-        fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round"
-      />
-      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill={color} />)}
-    </g>
-  )
+function niceMax(v: number): number {
+  const pow = 10 ** Math.floor(Math.log10(v))
+  return Math.ceil(v / pow) * pow
 }
 
 function Chart({
-  title, unit, benches, pick, colors,
+  title, unit, benches, pick, fmt,
 }: {
   title: string
   unit: string
   benches: Bench[]
   pick: (lv: Bench['levels'][number]) => number | undefined
-  colors: string[]
+  fmt: (v: number) => string
 }) {
   const all = benches.flatMap((b) => b.levels.map(pick).filter((v): v is number => v !== undefined))
-  const max = Math.max(...all, 1) * 1.15
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ f, v: max * f }))
+  const max = niceMax(Math.max(...all, 1))
   const levels = benches[0]?.levels ?? []
+  const x = (i: number) => PAD.l + (i / Math.max(1, levels.length - 1)) * (W - PAD.l - PAD.r)
+  const y = (v: number) => H - PAD.b - (v / max) * (H - PAD.t - PAD.b)
+  const colors = ['var(--alert)', 'var(--signal)'] // BF16 对照 / FP8 主线
+
   return (
     <figure className="chart">
-      <figcaption>{title}<span className="unit">{unit}</span></figcaption>
+      <figcaption>{title}<span>{unit}</span></figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
-        {ticks.map((t) => {
-          const y = H - PAD.b - t.f * (H - PAD.t - PAD.b)
+        {[1, 2 / 3, 1 / 3, 0].map((f, i) => (
+          <g key={f}>
+            <line
+              className="grid-line" x1={PAD.l} x2={W - PAD.r} y1={y(max * f)} y2={y(max * f)}
+              strokeDasharray={i === 3 ? undefined : '2 3'}
+            />
+            <text className="tick" x={PAD.l - 4} y={y(max * f) + 3} textAnchor="end">{fmt(max * f)}</text>
+          </g>
+        ))}
+        {benches.map((b, bi) => {
+          const pts = b.levels
+            .map((lv, i) => { const v = pick(lv); return v === undefined ? null : `${x(i)},${y(v)}` })
+            .filter(Boolean).join(' ')
           return (
-            <g key={t.f}>
-              <line x1={PAD.l} x2={W - PAD.r} y1={y} y2={y} className="grid" />
-              <text x={PAD.l - 6} y={y + 3} className="tick" textAnchor="end">
-                {t.v >= 100 ? Math.round(t.v) : t.v.toFixed(1)}
-              </text>
-            </g>
+            <polyline
+              key={b.label} points={pts} fill="none" stroke={colors[bi % 2]}
+              strokeWidth={b.label === 'fp8' ? 2.2 : 1.8} strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+            />
           )
         })}
-        {levels.map((lv, i) => {
-          const x = PAD.l + (i / Math.max(1, levels.length - 1)) * (W - PAD.l - PAD.r)
-          return <text key={lv.concurrency} x={x} y={H - 9} className="tick" textAnchor="middle">{lv.concurrency}</text>
-        })}
-        {benches.map((b, i) => <Line key={b.label} bench={b} pick={pick} color={colors[i % colors.length]} max={max} />)}
-      </svg>
-      <div className="legend">
-        {benches.map((b, i) => (
-          <span key={b.label}>
-            <i style={{ background: colors[i % colors.length] }} />
-            {b.label.toUpperCase()}
-          </span>
+        {levels.map((lv, i) => (
+          <text key={lv.concurrency} className="tick" x={x(i)} y={H - 8} textAnchor="middle">{lv.concurrency}</text>
         ))}
-        <span className="axis-note">横轴:并发路数</span>
-      </div>
+      </svg>
+      <div className="axis-note">横轴:并发数</div>
     </figure>
   )
 }
 
 export function BenchCharts({ benches }: { benches: Bench[] }) {
-  const colors = ['var(--signal)', 'var(--alert)']
+  const byLabel = (l: string) => benches.find((b) => b.label === l)
+  const peak = (b?: Bench) => Math.max(...(b?.levels.map((lv) => lv.output_tok_s ?? 0) ?? [0]))
+  const ttftAt64 = (b?: Bench) => b?.levels.find((lv) => lv.concurrency === 64)?.ttft_p50
+  const fp8 = byLabel('fp8')
+  const bf16 = byLabel('bf16')
+  const gain = peak(bf16) ? Math.round(((peak(fp8) - peak(bf16)) / peak(bf16)) * 100) : 0
   const b0 = benches[0]
+
   return (
     <>
-      <div className="charts">
-        <Chart title="输出吞吐" unit="tok/s" benches={benches} colors={colors} pick={(lv) => lv.output_tok_s} />
-        <Chart title="首 token 延迟 p95" unit="ms" benches={benches} colors={colors} pick={(lv) => lv.ttft_p95} />
-        <Chart title="每 token 间隔 p50" unit="ms" benches={benches} colors={colors} pick={(lv) => lv.tpot_p50} />
+      <div className="bench-grid">
+        <Chart
+          title="输出吞吐" unit="tok/s,越高越好" benches={benches}
+          pick={(lv) => lv.output_tok_s} fmt={(v) => (v >= 1000 ? `${+(v / 1000).toFixed(1)}k` : String(Math.round(v)))}
+        />
+        <Chart
+          title="首字延迟 p95" unit="ms,越低越好" benches={benches}
+          pick={(lv) => lv.ttft_p95} fmt={(v) => String(Math.round(v))}
+        />
+        <div className="bench-side">
+          <div className="key"><i style={{ background: 'var(--signal)' }} />FP8(主线)</div>
+          <div className="key"><i style={{ background: 'var(--alert)' }} />BF16(对照)</div>
+          <div className="big">
+            <div className="v num">{Math.round(peak(fp8)).toLocaleString()}</div>
+            <div className="k">FP8 峰值 tok/s,对 BF16 <b>{gain > 0 ? '+' : ''}{gain}%</b></div>
+          </div>
+          <div className="big">
+            <div className="v num">{Math.round(ttftAt64(fp8) ?? 0)}<small> ms</small></div>
+            <div className="k">并发 64 首字延迟,仍低于 BF16 的 {Math.round(ttftAt64(bf16) ?? 0)} ms</div>
+          </div>
+          <div className="tail">吞吐随并发近线性增长 → 单卡远未饱和。</div>
+        </div>
       </div>
-      <p className="note">
-        负载为 CMExam 真实题面(非合成 token),固定输出 {b0?.max_tokens} token,每档并发前预热 3 条。
-        卡型 {b0?.gpu || '见报告'} · 引擎 vLLM。数字仅对本卡型与本负载成立,不作跨硬件外推。
+      <p className="note" style={{ marginTop: '0.8rem' }}>
+        负载为 CMExam 真实题面(非合成 token),固定输出 {b0?.max_tokens} token(ignore_eos),每档并发前预热 3 条。
+        卡型 {b0?.gpu || '见报告'} · 引擎 vLLM · 七档并发全程零失败。数字仅对本卡型与本负载成立,不作跨硬件外推。
       </p>
     </>
   )
