@@ -15,8 +15,9 @@ unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY 2>/dev/null || tru
 serve_and_bench () {   # $1=label  $2...=vllm 附加参数
   local label="$1"; shift
   echo "== [$label] 起 vLLM =="
+  # 注:--disable-log-requests 在新版 vLLM 已移除,别加
   uv run vllm serve "$MODEL" --served-model-name target --port 8000 \
-    --disable-log-requests "$@" > "vllm_$label.log" 2>&1 &
+    "$@" > "vllm_$label.log" 2>&1 &
   local pid=$!
   until curl -sf http://127.0.0.1:8000/v1/models >/dev/null; do
     kill -0 $pid 2>/dev/null || { echo "vLLM 启动失败($label)"; tail -30 "vllm_$label.log"; return 1; }
