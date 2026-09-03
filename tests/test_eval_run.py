@@ -157,3 +157,28 @@ def test_abstain_prompt_variant(mock_server, tmp_path):
     run_set("a", [_sample("q1", "B")], tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False,
             gen={"prompt_variant": "abstain"})
     assert any("答案:不确定" in p for p in _Handler.seen_prompts)
+
+
+def test_main_wires_mode_prompt_and_fingerprint(mock_server, tmp_path, monkeypatch):
+    """[review] --mode / --prompt / --min-p 曾只挂在 argparse 上、没传进 gen 与 meta:forcing 与 abstain 臂会静默按普通模式跑。
+    通过 argparse 驱动 main(),断言指纹与实际请求都带上了这些参数。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q4", "B")])
+    _Handler.seen_prompts.clear()
+    argv = ["run", "--endpoint", mock_server, "--model", "mock", "--run-name", "wire", "--sets", "syn",
+            "--no-llm-judge", "--mode", "budget-forcing", "--prompt", "abstain", "--min-p", "0.05", "--limit", "1"]
+    monkeypatch.setattr(sys, "argv", argv)
+    run_mod.main()
+    meta = json.loads((tmp_path / "reports" / "runs" / "wire" / "run_meta.json").read_text())
+    assert (meta["mode"], meta["prompt"], meta["min_p"], meta["limit"]) == ("budget-forcing", "abstain", 0.05, 1)
+    assert meta["prompt_sha"] == run_mod.prompt_sha("abstain") and "prompt_variant" not in meta
+    assert any("答案:不确定" in p for p in _Handler.seen_prompts)            # 弃权变体真的发出去了
+    assert any(p.startswith("<|im_start|>user") for p in _Handler.seen_prompts)  # forcing 的裸 prompt 真的发出去了
+    summary = (tmp_path / "reports" / "runs" / "wire" / "summary.md").read_text()
+    assert "mode=budget-forcing" in summary and "prompt=abstain" in summary

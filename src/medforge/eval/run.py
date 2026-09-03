@@ -346,15 +346,18 @@ def main() -> None:
     gen = {
         "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": args.min_p,
         "presence_penalty": args.presence_penalty, "seed": args.seed,
+        "prompt_variant": args.prompt, "mode": args.mode,
     }
     meta = {
         "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint,
-        "max_tokens": args.max_tokens, **gen, "thinking": args.thinking,
-        "samples": sample_map, "llm_judge": not args.no_llm_judge,
+        "max_tokens": args.max_tokens, **{k: v for k, v in gen.items() if k != "prompt_variant"},
+        "prompt": args.prompt, "prompt_sha": prompt_sha(args.prompt),
+        "samples": sample_map, "limit": args.limit,
+        "thinking": args.thinking, "llm_judge": not args.no_llm_judge,
         "git": git_describe(ROOT), "created": datetime.now(UTC).astimezone().isoformat(timespec="seconds"),
     }
     out_dir = ROOT / "reports" / "runs" / args.run_name
-    check_protocol(out_dir, meta)
+    check_protocol(out_dir, meta, adopt_legacy=args.adopt_legacy)
 
     tables = []
     for name in args.sets.split(","):
