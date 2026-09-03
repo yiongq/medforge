@@ -103,7 +103,7 @@
 {"id": "cmexam-test-102", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7614, "cjk": 0.0208, "rep": 0.2785, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-103", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7962, "cjk": 0.0134, "rep": 0.2976, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-104", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6084, "cjk": 0.0948, "rep": 0.073, "degenerate": false, "extracted": "D"}
-{"id": "cmexam-test-105", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6452, "cjk": 0.0666, "rep": 0.2158, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-105", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6452, "cjk": 0.0666, "rep": 0.2158, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-106", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6320, "cjk": 0.0973, "rep": 0.1043, "degenerate": false, "extracted": "C"}
 {"id": "cmexam-test-107", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7529, "cjk": 0.0332, "rep": 0.1577, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-108", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8341, "cjk": 0.0158, "rep": 0.1171, "degenerate": false, "extracted": null}
@@ -533,7 +533,7 @@
 {"id": "cmexam-test-532", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8192, "cjk": 0.0057, "rep": 0.2146, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-533", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7951, "cjk": 0.0257, "rep": 0.1717, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-534", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5250, "cjk": 0.0596, "rep": 0.1517, "degenerate": false, "extracted": "B"}
-{"id": "cmexam-test-535", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 6447, "cjk": 0.0496, "rep": 0.1677, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-535", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6447, "cjk": 0.0496, "rep": 0.1677, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-536", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7260, "cjk": 0.019, "rep": 0.1574, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-537", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6727, "cjk": 0.0712, "rep": 0.0897, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-538", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 9065, "cjk": 0.017, "rep": 0.3357, "degenerate": false, "extracted": null}
@@ -646,7 +646,7 @@
 {"id": "cmexam-test-645", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8166, "cjk": 0.0105, "rep": 0.2823, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-646", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8177, "cjk": 0.0412, "rep": 0.1289, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-647", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7155, "cjk": 0.0249, "rep": 0.2507, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-648", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6229, "cjk": 0.0857, "rep": 0.1376, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-648", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6229, "cjk": 0.0857, "rep": 0.1376, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-649", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7308, "cjk": 0.0261, "rep": 0.1151, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-650", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6761, "cjk": 0.0629, "rep": 0.1178, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-651", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7864, "cjk": 0.0389, "rep": 0.084, "degenerate": false, "extracted": null}
@@ -747,7 +747,7 @@
 {"id": "cmexam-test-746", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6695, "cjk": 0.0945, "rep": 0.0755, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-747", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8346, "cjk": 0.0107, "rep": 0.1522, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-748", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8620, "cjk": 0.0295, "rep": 0.1206, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-749", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7478, "cjk": 0.0286, "rep": 0.1675, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-749", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7478, "cjk": 0.0286, "rep": 0.1675, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-750", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6940, "cjk": 0.0726, "rep": 0.0835, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-751", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5757, "cjk": 0.111, "rep": 0.0907, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-752", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 9048, "cjk": 0.0196, "rep": 0.1233, "degenerate": false, "extracted": null}
@@ -817,7 +817,7 @@
 {"id": "cmexam-test-816", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6669, "cjk": 0.0087, "rep": 0.1457, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-817", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7656, "cjk": 0.0317, "rep": 0.09, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-818", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6667, "cjk": 0.0352, "rep": 0.1487, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-819", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7091, "cjk": 0.0932, "rep": 0.1301, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-819", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7091, "cjk": 0.0932, "rep": 0.1301, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-820", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7684, "cjk": 0.0528, "rep": 0.0797, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-821", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7328, "cjk": 0.0116, "rep": 0.1376, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-822", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6373, "cjk": 0.0086, "rep": 0.272, "degenerate": false, "extracted": null}
@@ -958,7 +958,7 @@
 {"id": "cmexam-test-957", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8032, "cjk": 0.0167, "rep": 0.2316, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-958", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5267, "cjk": 0.1054, "rep": 0.0867, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-959", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7733, "cjk": 0.0164, "rep": 0.0892, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-960", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7972, "cjk": 0.0092, "rep": 0.1777, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-960", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7972, "cjk": 0.0092, "rep": 0.1777, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-961", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3484, "cjk": 0.0494, "rep": 0.1016, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-962", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8181, "cjk": 0.0187, "rep": 0.1236, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-963", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8478, "cjk": 0.0157, "rep": 0.1381, "degenerate": false, "extracted": null}
@@ -1037,7 +1037,7 @@
 {"id": "cmexam-test-1036", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7896, "cjk": 0.0447, "rep": 0.2083, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1037", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 9202, "cjk": 0.0364, "rep": 0.2753, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1038", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7277, "cjk": 0.0401, "rep": 0.1552, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-1039", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6079, "cjk": 0.0668, "rep": 0.096, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-1039", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6079, "cjk": 0.0668, "rep": 0.096, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1040", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7439, "cjk": 0.0124, "rep": 0.3126, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1041", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8100, "cjk": 0.0262, "rep": 0.2043, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1042", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7614, "cjk": 0.0142, "rep": 0.2978, "degenerate": false, "extracted": null}
@@ -1509,7 +1509,7 @@
 {"id": "cmexam-test-1508", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7787, "cjk": 0.0158, "rep": 0.3442, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1509", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6107, "cjk": 0.0822, "rep": 0.093, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1510", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8380, "cjk": 0.0141, "rep": 0.1008, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-1511", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7064, "cjk": 0.03, "rep": 0.2675, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-1511", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7064, "cjk": 0.03, "rep": 0.2675, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1512", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7959, "cjk": 0.0553, "rep": 0.1695, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1513", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7921, "cjk": 0.0251, "rep": 0.1722, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1514", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4787, "cjk": 0.1218, "rep": 0.1441, "degenerate": false, "extracted": "A"}
@@ -1663,7 +1663,7 @@
 {"id": "cmexam-test-1662", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4367, "cjk": 0.1168, "rep": 0.1153, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-1663", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7287, "cjk": 0.022, "rep": 0.0975, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1664", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7806, "cjk": 0.02, "rep": 0.1742, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-1665", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7142, "cjk": 0.0405, "rep": 0.1299, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-1665", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7142, "cjk": 0.0405, "rep": 0.1299, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1666", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7071, "cjk": 0.0481, "rep": 0.1141, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-1667", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3436, "cjk": 0.0958, "rep": 0.1498, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-1668", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8644, "cjk": 0.0464, "rep": 0.623, "degenerate": true, "extracted": null}
@@ -2154,7 +2154,7 @@
 {"id": "cmexam-test-2153", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6634, "cjk": 0.039, "rep": 0.2672, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2154", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7900, "cjk": 0.0213, "rep": 0.1858, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2155", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 9344, "cjk": 0.0039, "rep": 0.2552, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-2156", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 8208, "cjk": 0.0447, "rep": 0.174, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-2156", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8208, "cjk": 0.0447, "rep": 0.174, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2157", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7916, "cjk": 0.0623, "rep": 0.2098, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2158", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3769, "cjk": 0.1085, "rep": 0.0926, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-2159", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6863, "cjk": 0.0685, "rep": 0.0807, "degenerate": false, "extracted": null}
@@ -2179,7 +2179,7 @@
 {"id": "cmexam-test-2178", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7306, "cjk": 0.0263, "rep": 0.1645, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2179", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 9113, "cjk": 0.0174, "rep": 0.2474, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2180", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7958, "cjk": 0.0195, "rep": 0.2046, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-2181", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6233, "cjk": 0.0722, "rep": 0.1614, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-2181", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6233, "cjk": 0.0722, "rep": 0.1614, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2182", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7047, "cjk": 0.0433, "rep": 0.1662, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2183", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6032, "cjk": 0.0857, "rep": 0.0842, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2184", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8720, "cjk": 0.0217, "rep": 0.1053, "degenerate": false, "extracted": null}
@@ -2297,7 +2297,7 @@
 {"id": "cmexam-test-2296", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 5662, "cjk": 0.1065, "rep": 0.1652, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2297", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8010, "cjk": 0.0202, "rep": 0.0817, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2298", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8154, "cjk": 0.0134, "rep": 0.1988, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-2299", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6384, "cjk": 0.052, "rep": 0.1, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-2299", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6384, "cjk": 0.052, "rep": 0.1, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2300", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7782, "cjk": 0.0365, "rep": 0.1286, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2301", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4378, "cjk": 0.0594, "rep": 0.1281, "degenerate": false, "extracted": "E"}
 {"id": "cmexam-test-2302", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4420, "cjk": 0.0939, "rep": 0.0812, "degenerate": false, "extracted": "E"}
@@ -2495,7 +2495,7 @@
 {"id": "cmexam-test-2494", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7160, "cjk": 0.0323, "rep": 0.2637, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2495", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8747, "cjk": 0.0249, "rep": 0.1268, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2496", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7909, "cjk": 0.0402, "rep": 0.5768, "degenerate": true, "extracted": null}
-{"id": "cmexam-test-2497", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8182, "cjk": 0.0323, "rep": 0.1033, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-2497", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8182, "cjk": 0.0323, "rep": 0.1033, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2498", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8348, "cjk": 0.0111, "rep": 0.2148, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2499", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6431, "cjk": 0.0711, "rep": 0.1063, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-2500", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4199, "cjk": 0.08, "rep": 0.097, "degenerate": false, "extracted": "C"}
@@ -2678,7 +2678,7 @@
 {"id": "cmexam-test-2677", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8082, "cjk": 0.02, "rep": 0.1276, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2678", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7390, "cjk": 0.1394, "rep": 0.2086, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2679", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8248, "cjk": 0.0189, "rep": 0.2038, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-2680", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7757, "cjk": 0.0343, "rep": 0.1579, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-2680", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7757, "cjk": 0.0343, "rep": 0.1579, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2681", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8373, "cjk": 0.0316, "rep": 0.1772, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2682", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7955, "cjk": 0.0175, "rep": 0.169, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-2683", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7556, "cjk": 0.0339, "rep": 0.2226, "degenerate": false, "extracted": null}
@@ -3428,7 +3428,7 @@
 {"id": "cmexam-test-3428", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7372, "cjk": 0.0138, "rep": 0.1451, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3429", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8361, "cjk": 0.0089, "rep": 0.5412, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-3430", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7751, "cjk": 0.0164, "rep": 0.2111, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-3431", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7485, "cjk": 0.0223, "rep": 0.1279, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-3431", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7485, "cjk": 0.0223, "rep": 0.1279, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3432", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8330, "cjk": 0.0163, "rep": 0.1652, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3433", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8696, "cjk": 0.0342, "rep": 0.1572, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3434", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7343, "cjk": 0.0532, "rep": 0.1188, "degenerate": false, "extracted": null}
@@ -3713,7 +3713,7 @@
 {"id": "cmexam-test-3713", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6205, "cjk": 0.0475, "rep": 0.1223, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3714", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 3367, "cjk": 0.1301, "rep": 0.0596, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-3715", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7388, "cjk": 0.0679, "rep": 0.173, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-3716", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7785, "cjk": 0.0141, "rep": 0.1863, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-3716", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7785, "cjk": 0.0141, "rep": 0.1863, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3717", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7980, "cjk": 0.0347, "rep": 0.1762, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3718", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8190, "cjk": 0.0305, "rep": 0.1963, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3719", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8600, "cjk": 0.0128, "rep": 0.2309, "degenerate": false, "extracted": null}
@@ -3790,7 +3790,7 @@
 {"id": "cmexam-test-3790", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5740, "cjk": 0.0664, "rep": 0.1462, "degenerate": false, "extracted": "C"}
 {"id": "cmexam-test-3791", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7552, "cjk": 0.0323, "rep": 0.0897, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3792", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6196, "cjk": 0.0634, "rep": 0.3555, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-3793", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6480, "cjk": 0.0552, "rep": 0.099, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-3793", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6480, "cjk": 0.0552, "rep": 0.099, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3794", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 5898, "cjk": 0.13, "rep": 0.1943, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3795", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6543, "cjk": 0.0897, "rep": 0.1208, "degenerate": false, "extracted": "E"}
 {"id": "cmexam-test-3796", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6493, "cjk": 0.0322, "rep": 0.2071, "degenerate": false, "extracted": null}
@@ -3864,7 +3864,7 @@
 {"id": "cmexam-test-3864", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8866, "cjk": 0.0134, "rep": 0.2356, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3865", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8607, "cjk": 0.0186, "rep": 0.1416, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3866", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6818, "cjk": 0.0229, "rep": 0.3673, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-3867", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6194, "cjk": 0.0588, "rep": 0.1883, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-3867", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6194, "cjk": 0.0588, "rep": 0.1883, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3868", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8199, "cjk": 0.0211, "rep": 0.2921, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3869", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 9379, "cjk": 0.0597, "rep": 0.3292, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3870", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 7224, "cjk": 0.0572, "rep": 0.0835, "degenerate": false, "extracted": "C"}
@@ -3915,7 +3915,7 @@
 {"id": "cmexam-test-3915", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8181, "cjk": 0.0115, "rep": 0.2116, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3916", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8253, "cjk": 0.0303, "rep": 0.1507, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3917", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7856, "cjk": 0.0388, "rep": 0.0712, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-3918", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7868, "cjk": 0.0308, "rep": 0.2113, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-3918", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7868, "cjk": 0.0308, "rep": 0.2113, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3919", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6468, "cjk": 0.0026, "rep": 0.6205, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-3920", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7491, "cjk": 0.0222, "rep": 0.1955, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-3921", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6301, "cjk": 0.0621, "rep": 0.1306, "degenerate": false, "extracted": null}
@@ -4006,7 +4006,7 @@
 {"id": "cmexam-test-4006", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7843, "cjk": 0.0077, "rep": 0.1271, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4007", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8261, "cjk": 0.018, "rep": 0.1048, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4008", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7977, "cjk": 0.0503, "rep": 0.287, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4009", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7820, "cjk": 0.0375, "rep": 0.1126, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4009", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7820, "cjk": 0.0375, "rep": 0.1126, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4010", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7040, "cjk": 0.0189, "rep": 0.3695, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4011", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8533, "cjk": 0.0154, "rep": 0.1414, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4012", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7002, "cjk": 0.0571, "rep": 0.1048, "degenerate": false, "extracted": null}
@@ -4061,7 +4061,7 @@
 {"id": "cmexam-test-4061", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7360, "cjk": 0.0158, "rep": 0.1655, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4062", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7635, "cjk": 0.0329, "rep": 0.1379, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4063", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4666, "cjk": 0.1204, "rep": 0.1637, "degenerate": false, "extracted": "A"}
-{"id": "cmexam-test-4064", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 8845, "cjk": 0.0242, "rep": 0.1176, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4064", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8845, "cjk": 0.0242, "rep": 0.1176, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4065", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7601, "cjk": 0.0251, "rep": 0.279, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4066", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8006, "cjk": 0.0301, "rep": 0.1549, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4067", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4328, "cjk": 0.0656, "rep": 0.1815, "degenerate": false, "extracted": "C"}
@@ -4305,7 +4305,7 @@
 {"id": "cmexam-test-4305", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7331, "cjk": 0.1215, "rep": 0.1243, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4306", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7259, "cjk": 0.0204, "rep": 0.1539, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4307", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7140, "cjk": 0.0578, "rep": 0.1138, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4308", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6567, "cjk": 0.0276, "rep": 0.1675, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4308", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6567, "cjk": 0.0276, "rep": 0.1675, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4309", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7501, "cjk": 0.0309, "rep": 0.1569, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4310", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8582, "cjk": 0.029, "rep": 0.1487, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4311", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8031, "cjk": 0.0181, "rep": 0.1817, "degenerate": false, "extracted": null}
@@ -4316,7 +4316,7 @@
 {"id": "cmexam-test-4316", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7090, "cjk": 0.0932, "rep": 0.096, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4317", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8276, "cjk": 0.0127, "rep": 0.1642, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4318", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6515, "cjk": 0.0576, "rep": 0.171, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4319", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": false, "method": "rule", "chars": 7082, "cjk": 0.036, "rep": 0.1472, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4319", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7082, "cjk": 0.036, "rep": 0.1472, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4320", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 4627, "cjk": 0.1083, "rep": 0.1582, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-4321", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6376, "cjk": 0.0612, "rep": 0.1572, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4322", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5929, "cjk": 0.1231, "rep": 0.1168, "degenerate": false, "extracted": "D"}
@@ -4349,7 +4349,7 @@
 {"id": "cmexam-test-4349", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7055, "cjk": 0.0242, "rep": 0.1617, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4350", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8767, "cjk": 0.02, "rep": 0.7636, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-4351", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6004, "cjk": 0.0581, "rep": 0.1802, "degenerate": false, "extracted": "C"}
-{"id": "cmexam-test-4352", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8999, "cjk": 0.0087, "rep": 0.1326, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4352", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8999, "cjk": 0.0087, "rep": 0.1326, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4353", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 6938, "cjk": 0.0502, "rep": 0.1371, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4354", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5657, "cjk": 0.0735, "rep": 0.1166, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-4355", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7306, "cjk": 0.0365, "rep": 0.1549, "degenerate": false, "extracted": null}
@@ -4473,7 +4473,7 @@
 {"id": "cmexam-test-4473", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7720, "cjk": 0.0289, "rep": 0.2921, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4474", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4973, "cjk": 0.0885, "rep": 0.1296, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-4475", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6306, "cjk": 0.0683, "rep": 0.0872, "degenerate": false, "extracted": "A"}
-{"id": "cmexam-test-4476", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8089, "cjk": 0.0237, "rep": 0.1514, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4476", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8089, "cjk": 0.0237, "rep": 0.1514, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4477", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7851, "cjk": 0.0301, "rep": 0.2392, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4478", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4346, "cjk": 0.0884, "rep": 0.1274, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-4479", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3948, "cjk": 0.1266, "rep": 0.1146, "degenerate": false, "extracted": "D"}
@@ -4573,7 +4573,7 @@
 {"id": "cmexam-test-4573", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7817, "cjk": 0.0249, "rep": 0.1178, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4574", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5804, "cjk": 0.0851, "rep": 0.1073, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-4575", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 9141, "cjk": 0.0249, "rep": 0.2384, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4576", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7793, "cjk": 0.0228, "rep": 0.1401, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4576", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7793, "cjk": 0.0228, "rep": 0.1401, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4577", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8069, "cjk": 0.0475, "rep": 0.2041, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4578", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6604, "cjk": 0.0604, "rep": 0.7912, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-4579", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6803, "cjk": 0.0231, "rep": 0.2038, "degenerate": false, "extracted": null}
@@ -4646,7 +4646,7 @@
 {"id": "cmexam-test-4646", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6332, "cjk": 0.1023, "rep": 0.1248, "degenerate": false, "extracted": "C"}
 {"id": "cmexam-test-4647", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7727, "cjk": 0.0872, "rep": 0.2537, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4648", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8162, "cjk": 0.0221, "rep": 0.0958, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4649", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": false, "method": "rule", "chars": 7089, "cjk": 0.0473, "rep": 0.1394, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4649", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 7089, "cjk": 0.0473, "rep": 0.1394, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4650", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7329, "cjk": 0.0529, "rep": 0.1309, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4651", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8106, "cjk": 0.0169, "rep": 0.1634, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4652", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7721, "cjk": 0.0231, "rep": 0.1685, "degenerate": false, "extracted": null}
@@ -4769,7 +4769,7 @@
 {"id": "cmexam-test-4769", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4786, "cjk": 0.0729, "rep": 0.2219, "degenerate": false, "extracted": "C"}
 {"id": "cmexam-test-4770", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7962, "cjk": 0.0432, "rep": 0.1241, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4771", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7559, "cjk": 0.0239, "rep": 0.1186, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4772", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6207, "cjk": 0.0681, "rep": 0.1048, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4772", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6207, "cjk": 0.0681, "rep": 0.1048, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4773", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8179, "cjk": 0.0273, "rep": 0.0958, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4774", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8649, "cjk": 0.0091, "rep": 0.1489, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4775", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6965, "cjk": 0.0541, "rep": 0.2143, "degenerate": false, "extracted": null}
@@ -4872,7 +4872,7 @@
 {"id": "cmexam-test-4872", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7808, "cjk": 0.0172, "rep": 0.1434, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4873", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8062, "cjk": 0.0076, "rep": 0.1256, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4874", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7942, "cjk": 0.0262, "rep": 0.449, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-4875", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8234, "cjk": 0.0083, "rep": 0.1519, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-4875", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8234, "cjk": 0.0083, "rep": 0.1519, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4876", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5364, "cjk": 0.0886, "rep": 0.1652, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-4877", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8109, "cjk": 0.0307, "rep": 0.272, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-4878", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6501, "cjk": 0.0897, "rep": 0.1715, "degenerate": false, "extracted": null}
@@ -5118,7 +5118,7 @@
 {"id": "cmexam-test-5118", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8163, "cjk": 0.0098, "rep": 0.2078, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5119", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4430, "cjk": 0.1406, "rep": 0.1504, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-5120", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7930, "cjk": 0.0163, "rep": 0.1258, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5121", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7331, "cjk": 0.0477, "rep": 0.0712, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5121", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7331, "cjk": 0.0477, "rep": 0.0712, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5122", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6194, "cjk": 0.0638, "rep": 0.1853, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5123", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7320, "cjk": 0.0295, "rep": 0.1241, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5124", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6909, "cjk": 0.0431, "rep": 0.1073, "degenerate": false, "extracted": null}
@@ -5264,7 +5264,7 @@
 {"id": "cmexam-test-5264", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7894, "cjk": 0.0619, "rep": 0.1196, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5265", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4962, "cjk": 0.1429, "rep": 0.0953, "degenerate": false, "extracted": "B"}
 {"id": "cmexam-test-5266", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7087, "cjk": 0.0109, "rep": 0.4229, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5267", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7910, "cjk": 0.0135, "rep": 0.1519, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5267", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7910, "cjk": 0.0135, "rep": 0.1519, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5268", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 4959, "cjk": 0.006, "rep": 0.6207, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-5269", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5679, "cjk": 0.088, "rep": 0.1329, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-5270", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8064, "cjk": 0.0326, "rep": 0.1276, "degenerate": false, "extracted": null}
@@ -5414,7 +5414,7 @@
 {"id": "cmexam-test-5414", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 5872, "cjk": 0.1039, "rep": 0.2021, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5415", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7904, "cjk": 0.0172, "rep": 0.2279, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5416", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7803, "cjk": 0.0299, "rep": 0.2259, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5417", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7812, "cjk": 0.0196, "rep": 0.2336, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5417", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7812, "cjk": 0.0196, "rep": 0.2336, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5418", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7531, "cjk": 0.0442, "rep": 0.1484, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5419", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8568, "cjk": 0.0204, "rep": 0.1843, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5420", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8502, "cjk": 0.0405, "rep": 0.5375, "degenerate": true, "extracted": null}
@@ -5458,7 +5458,7 @@
 {"id": "cmexam-test-5458", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 9006, "cjk": 0.0173, "rep": 0.2675, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5459", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7787, "cjk": 0.0146, "rep": 0.1454, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5460", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7199, "cjk": 0.0249, "rep": 0.1629, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5461", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 6970, "cjk": 0.0461, "rep": 0.1384, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5461", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6970, "cjk": 0.0461, "rep": 0.1384, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5462", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3954, "cjk": 0.086, "rep": 0.158, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-5463", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 7292, "cjk": 0.0832, "rep": 0.075, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-5464", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4425, "cjk": 0.0969, "rep": 0.2028, "degenerate": false, "extracted": "C"}
@@ -5540,7 +5540,7 @@
 {"id": "cmexam-test-5540", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7822, "cjk": 0.0036, "rep": 0.3299, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5541", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6150, "cjk": 0.098, "rep": 0.0897, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5542", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 6146, "cjk": 0.0835, "rep": 0.082, "degenerate": false, "extracted": "D"}
-{"id": "cmexam-test-5543", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 6608, "cjk": 0.0505, "rep": 0.1426, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5543", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6608, "cjk": 0.0505, "rep": 0.1426, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5544", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4808, "cjk": 0.0936, "rep": 0.1218, "degenerate": false, "extracted": "A"}
 {"id": "cmexam-test-5545", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6917, "cjk": 0.0587, "rep": 0.1424, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5546", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7669, "cjk": 0.0167, "rep": 0.1963, "degenerate": false, "extracted": null}
@@ -5625,7 +5625,7 @@
 {"id": "cmexam-test-5625", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6654, "cjk": 0.0045, "rep": 0.0862, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5626", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5186, "cjk": 0.1142, "rep": 0.095, "degenerate": false, "extracted": "C"}
 {"id": "cmexam-test-5627", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7706, "cjk": 0.0179, "rep": 0.1715, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5628", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7993, "cjk": 0.0216, "rep": 0.1233, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5628", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7993, "cjk": 0.0216, "rep": 0.1233, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5629", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8070, "cjk": 0.0249, "rep": 0.1326, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5630", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7830, "cjk": 0.0106, "rep": 0.9634, "degenerate": true, "extracted": null}
 {"id": "cmexam-test-5631", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7763, "cjk": 0.0242, "rep": 0.4299, "degenerate": false, "extracted": null}
@@ -5751,7 +5751,7 @@
 {"id": "cmexam-test-5751", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7111, "cjk": 0.0354, "rep": 0.3319, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5752", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7231, "cjk": 0.0625, "rep": 0.0855, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5753", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6373, "cjk": 0.0146, "rep": 0.191, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5754", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 9021, "cjk": 0.0325, "rep": 0.0825, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5754", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 9021, "cjk": 0.0325, "rep": 0.0825, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5755", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6721, "cjk": 0.0426, "rep": 0.1033, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5756", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8993, "cjk": 0.0121, "rep": 0.184, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5757", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7695, "cjk": 0.0424, "rep": 0.095, "degenerate": false, "extracted": null}
@@ -5767,7 +5767,7 @@
 {"id": "cmexam-test-5767", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 7534, "cjk": 0.0461, "rep": 0.2116, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5768", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 8026, "cjk": 0.0097, "rep": 0.2008, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5769", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 3714, "cjk": 0.1039, "rep": 0.0807, "degenerate": false, "extracted": "C"}
-{"id": "cmexam-test-5770", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8131, "cjk": 0.0167, "rep": 0.1053, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5770", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8131, "cjk": 0.0167, "rep": 0.1053, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5771", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 5302, "cjk": 0.1058, "rep": 0.1268, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-5772", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 6897, "cjk": 0.1377, "rep": 0.4994, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5773", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 8437, "cjk": 0.0122, "rep": 0.1146, "degenerate": false, "extracted": null}
@@ -5808,7 +5808,7 @@
 {"id": "cmexam-test-5808", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7514, "cjk": 0.0152, "rep": 0.1707, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5809", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7038, "cjk": 0.0386, "rep": 0.1093, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5810", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 8155, "cjk": 0.0298, "rep": 0.2402, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-5811", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 8075, "cjk": 0.0178, "rep": 0.0857, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-5811", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8075, "cjk": 0.0178, "rep": 0.0857, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5812", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7545, "cjk": 0.0097, "rep": 0.1467, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-5813", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4679, "cjk": 0.0483, "rep": 0.1146, "degenerate": false, "extracted": "D"}
 {"id": "cmexam-test-5814", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 4707, "cjk": 0.1013, "rep": 0.1188, "degenerate": false, "extracted": "A"}
@@ -6470,7 +6470,7 @@
 {"id": "cmexam-test-6470", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8335, "cjk": 0.026, "rep": 0.1529, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6471", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 8266, "cjk": 0.0161, "rep": 0.1075, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6472", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7153, "cjk": 0.0431, "rep": 0.1354, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-6473", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 7111, "cjk": 0.0551, "rep": 0.1612, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-6473", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7111, "cjk": 0.0551, "rep": 0.1612, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6474", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7891, "cjk": 0.0063, "rep": 0.1399, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6475", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 6581, "cjk": 0.096, "rep": 0.0953, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6476", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7917, "cjk": 0.0236, "rep": 0.1341, "degenerate": false, "extracted": null}
@@ -6646,7 +6646,7 @@
 {"id": "cmexam-test-6646", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7365, "cjk": 0.0335, "rep": 0.2625, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6647", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 6563, "cjk": 0.0446, "rep": 0.1253, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6648", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 7540, "cjk": 0.0131, "rep": 0.1401, "degenerate": false, "extracted": null}
-{"id": "cmexam-test-6649", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "rule", "chars": 7147, "cjk": 0.0414, "rep": 0.1497, "degenerate": false, "extracted": null}
+{"id": "cmexam-test-6649", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7147, "cjk": 0.0414, "rep": 0.1497, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6650", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7190, "cjk": 0.0672, "rep": 0.0687, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6651", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7562, "cjk": 0.0495, "rep": 0.1457, "degenerate": false, "extracted": null}
 {"id": "cmexam-test-6652", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 7878, "cjk": 0.0157, "rep": 0.1364, "degenerate": false, "extracted": null}

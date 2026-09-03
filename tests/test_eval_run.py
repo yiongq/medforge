@@ -94,8 +94,34 @@ def test_protocol_fingerprint_rejects_mixed_decoding(tmp_path):
     from medforge.eval.run import check_protocol
 
     meta = {"model": "m", "max_tokens": 8192, "temperature": 0.0, "top_p": 1.0, "top_k": -1,
-            "presence_penalty": 0.0, "seed": 42, "thinking": False}
+            "presence_penalty": 0.0, "seed": 42, "prompt_sha": "abcd1234", "samples": {"cmexam": 2000},
+            "limit": 0, "thinking": "on", "llm_judge": True, "git": "aaa", "created": "t1"}
     check_protocol(tmp_path, meta)  # 首次:写 run_meta.json
-    check_protocol(tmp_path, dict(meta))  # 同协议:放行
+    check_protocol(tmp_path, {**meta, "git": "bbb", "created": "t2"})  # 同协议、换了提交:放行并追加 history
+    saved = json.loads((tmp_path / "run_meta.json").read_text())
+    assert [h["git"] for h in saved["history"]] == ["aaa", "bbb"] and saved["legacy"] is False
+    for bad in ({"temperature": 0.6}, {"samples": {"cmexam": 500}}, {"thinking": "off"}, {"prompt_sha": "ffff0000"}):
+        with pytest.raises(SystemExit):
+            check_protocol(tmp_path, {**meta, **bad})  # 换了协议还往同一目录写:拒绝
+
+
+def test_protocol_refuses_legacy_archive_without_meta(tmp_path):
+    # W2 之前的存档目录:有答卷、没指纹——默认拒绝,--adopt-legacy 才补写并标记 legacy
+    from medforge.eval.run import check_protocol
+
+    (tmp_path / "cmexam.outputs.jsonl").write_text('{"id": "q1", "output": "答案:B"}\n', encoding="utf-8")
+    meta = {"model": "m", "git": "aaa", "created": "t1"}
     with pytest.raises(SystemExit):
-        check_protocol(tmp_path, {**meta, "temperature": 0.6})  # 换了解码参数还往同一目录写:拒绝
+        check_protocol(tmp_path, meta)
+    check_protocol(tmp_path, meta, adopt_legacy=True)
+    assert json.loads((tmp_path / "run_meta.json").read_text())["legacy"] is True
+
+
+def test_thinking_mode_changes_archive_scoring(mock_server, tmp_path):
+    # 旧格式答卷(无 finish_reason)+ 未收尾复读流:thinking=True 判未收尾,auto 会放过(见 verifier)
+    samples = [_sample("q1", "B")]
+    loop = "候选是 B…等等再想想…答案:B 等等再想想…答案:B"
+    (tmp_path / "s.outputs.jsonl").write_text(json.dumps({"id": "q1", "output": loop}, ensure_ascii=False) + "\n", "utf-8")
+    r_on = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False, thinking=True), "on")
+    r_auto = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False), "auto")
+    assert (r_on.correct, r_on.unfinished) == (0, 1) and (r_auto.correct, r_auto.unfinished) == (1, 0)

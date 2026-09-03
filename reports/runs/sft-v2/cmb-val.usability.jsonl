@@ -42,7 +42,7 @@
 {"id": "cmb-val-41", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "llm", "chars": 352, "cjk": 0.7898, "rep": 0.0616, "degenerate": false, "extracted": "ABCD"}
 {"id": "cmb-val-42", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 483, "cjk": 0.8178, "rep": 0.0, "degenerate": false, "extracted": null}
 {"id": "cmb-val-43", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 387, "cjk": 0.8217, "rep": 0.0, "degenerate": false, "extracted": "B"}
-{"id": "cmb-val-44", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 267, "cjk": 0.7603, "rep": 0.1523, "degenerate": false, "extracted": null}
+{"id": "cmb-val-44", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 267, "cjk": 0.7603, "rep": 0.1523, "degenerate": false, "extracted": null}
 {"id": "cmb-val-45", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 423, "cjk": 0.8085, "rep": 0.0267, "degenerate": false, "extracted": "ABCD"}
 {"id": "cmb-val-46", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 283, "cjk": 0.8021, "rep": 0.0, "degenerate": false, "extracted": "A"}
 {"id": "cmb-val-47", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "llm", "chars": 388, "cjk": 0.8015, "rep": 0.0345, "degenerate": false, "extracted": "ABCD"}
@@ -195,7 +195,7 @@
 {"id": "cmb-val-194", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 532, "cjk": 0.8139, "rep": 0.0192, "degenerate": false, "extracted": null}
 {"id": "cmb-val-195", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 419, "cjk": 0.8138, "rep": 0.0025, "degenerate": false, "extracted": null}
 {"id": "cmb-val-196", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 360, "cjk": 0.8444, "rep": 0.0143, "degenerate": false, "extracted": "D"}
-{"id": "cmb-val-197", "finished": true, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "llm", "chars": 619, "cjk": 0.8094, "rep": 0.0, "degenerate": false, "extracted": null}
+{"id": "cmb-val-197", "finished": true, "declared": false, "strict": false, "rule_full": false, "wide": true, "method": "llm", "chars": 619, "cjk": 0.8094, "rep": 0.0, "degenerate": false, "extracted": null}
 {"id": "cmb-val-198", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 424, "cjk": 0.8396, "rep": 0.0242, "degenerate": false, "extracted": "E"}
 {"id": "cmb-val-199", "finished": true, "declared": true, "strict": true, "rule_full": true, "wide": true, "method": "rule", "chars": 397, "cjk": 0.8388, "rep": 0.0, "degenerate": false, "extracted": "B"}
 {"id": "cmb-val-200", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 407, "cjk": 0.8084, "rep": 0.0025, "degenerate": false, "extracted": "AB"}

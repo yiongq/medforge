@@ -9,14 +9,17 @@ W2 审查(2026-09-03)发现:协议 v2 的 temperature=0 让思考型基座在 81
   声明  declared   </think> 之后的作答段能被规则层抽出答案(不从思考流里刮)
   严格  strict     收尾 ∧ 声明 ∧ 答对——「调用方拿到手的东西是对的」
   退化  degenerate 尾部 12-gram 重复率 ≥ 0.5(语言无关;标定见 REP_THRESHOLD 注释)
-宽口径(as-scored)= 原 scored.jsonl 里的 correct,含 LLM 兜底与从复读段刮出的硬分。
-严格 ⊆ 宽口径,两者的差就是「被口径送掉的分」。
+宽口径(as-scored)= 原 scored.jsonl 里的 correct,含 LLM 兜底与从复读段刮出的硬分,
+用的是 W2 审查前的抽取器——所以它与严格口径不严格可比(新抽取器补抽的少数题会让严格 > 宽口径),只作对外数字的锚。
+「规则层·全文」才是与严格口径同抽取器、只差守卫的一列:严格 ≤ 规则层·全文 恒成立。
 
 用法:
-    uv run python -m medforge.eval.usability \
-      --runs base-v2,sft-v2,sft-r1-v2,dpo-v2 --baseline base-v2 --out reports/usability.md
+    # 本机有原始答卷(reports/runs/<run>/<set>.outputs.jsonl):重新打标 + 出表
+    uv run python -m medforge.eval.usability --runs base-v2,sft-v2,sft-r1-v2,dpo-v2 --baseline base-v2
+    # 第三方(只有 git 里的逐题标签):直接出表,不碰标签文件
+    uv run python -m medforge.eval.usability --from-tags
 产出:
-    reports/runs/<run>/<set>.usability.jsonl  逐题标签(小文件,可入 git:第三方无需 300MB 原始答卷即可复算表格)
+    reports/runs/<run>/<set>.usability.jsonl  逐题标签(小文件,入 git:第三方无需 300MB 原始答卷即可复算表格)
     reports/usability.md                       各集对照表 + 配对 McNemar + 三层分解
 """
 
@@ -97,14 +100,16 @@ def tag_output(sample: Sample, output: str | None, scored: dict) -> Tag:
 def tag_run(run_dir: Path, eval_set: str, samples: dict[str, Sample]) -> list[Tag]:
     """给一个 run 的一套卷打标,顺序与 scored.jsonl 一致;同时落 <set>.usability.jsonl。"""
     scored = load_verdicts(run_dir / f"{eval_set}.scored.jsonl")
-    outputs: dict[str, str] = {}
     out_file = run_dir / f"{eval_set}.outputs.jsonl"
-    if out_file.exists():
-        for line in out_file.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                row = json.loads(line)
-                if row["id"] in scored:  # outputs 可能含早期会话残留,只认被判分的题
-                    outputs[row["id"]] = row["output"]
+    if not out_file.exists():
+        # 没有原始答卷就不能重新打标——静默把全部题打成「未收尾」会覆盖掉入库的标签文件
+        raise FileNotFoundError(f"{out_file} 不存在:用 --from-tags 直接读已入库的 usability.jsonl 出表")
+    outputs: dict[str, str] = {}
+    for line in out_file.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            row = json.loads(line)
+            if row["id"] in scored:  # outputs 可能含早期会话残留,只认被判分的题
+                outputs[row["id"]] = row["output"]
     tags = [tag_output(samples[sid], outputs.get(sid), row) for sid, row in scored.items() if sid in samples]
     with (run_dir / f"{eval_set}.usability.jsonl").open("w", encoding="utf-8") as f:
         for t in tags:
@@ -159,8 +164,9 @@ def _rate(tags: list[Tag], ids: set[str], attr: str) -> float:
     return sum(getattr(t, attr) for t in tags if t.id in ids) / (len(ids) or 1)
 
 
-def _vs(p: Paired, stat_a: float, stat_b: float) -> str:
-    return f"{(stat_b - stat_a) * 100:+.1f}pp · 独对 {p.a_only}/{p.b_only} · p={p.p_value:.4f}"
+def _vs(p: Paired, stat_a: float, stat_b: float, n_total: int) -> str:
+    n = f" · n={p.n}" if p.n != n_total else ""
+    return f"{(stat_b - stat_a) * 100:+.1f}pp{n} · 独对 {p.a_only}/{p.b_only} · p={p.p_value:.4f}"
 
 
 def render(
@@ -174,7 +180,8 @@ def render(
         "",
         "## 口径",
         "",
-        "- **收尾率**:输出恰好一个 `</think>`。没写完的答卷末段多半是复读循环,不该有分。",
+        "- **收尾率**:输出含 `</think>`(作答段取最后一个之后)。v2 协议下未收尾的答卷约七成落入复读循环;",
+        "  v1 存档(base)是 2048 token 硬截断,同样不该有分但机理不同,其退化率列不可与 v2 横比。",
         "- **声明率**:`</think>` 之后的作答段能被规则层抽出答案。不从思考流里刮——",
         "  原 scored 的规则层看的是全文末 2000 字,对未收尾答卷那正是循环体。",
         "- **严格准确率** = 收尾 ∧ 声明 ∧ 答对(选择题字母集合相等;开放题规则层精确匹配)。",
@@ -184,8 +191,10 @@ def render(
         "- **宽口径(as-scored)**:原 scored.jsonl 的判分,含 LLM 兜底与刮草稿,用的是 W2 审查前的抽取器",
         "  (连写多选「答案:ABD」抽不出、跨行分隔误并),所以它与前两列不严格可比,只作对外数字的锚。",
         f"- **退化率**:末 {REP_WINDOW} 字符的 {REP_N}-gram 重复率 ≥ {REP_THRESHOLD}。语言无关;",
-        "  标定:写完的答卷 p99 ≤ 0.37,未收尾复读的答卷中位 0.57~0.98。",
-        "- **vs 基线**:同一批题配对,McNemar 精确检验(双侧);「独对 a/b」= 只有基线对 / 只有本 run 对。",
+        "  标定(v2 存档):写完的答卷 p99 ≤ 0.37,0.5 之上几乎不含写完的答卷;未收尾答卷中位 0.57~0.98,",
+        "  约三成未收尾答卷落在 0.5 以下(被掐断时尚未进入复读)——它是单侧指标,不是截断的代理。",
+        "- **vs 基线**:同一批题配对,McNemar 精确检验(双侧);「独对 a/b」= 只有基线对 / 只有本 run 对;",
+        "  pp 差值按配对子集算(v1 全量卷与 v2 抽样卷配对时取交集,n 标在格内),与整卷的严格准确率相减对不上是正常的。",
         "",
         "所有 run 考的是同一批固定种子抽样题,可逐题配对;v1 存档(base)是全量卷,配对时取交集。",
         "",
@@ -209,8 +218,8 @@ def render(
                 # 配对子集上的差值:v1 全量卷与 v2 抽样卷交集时,用子集内的比例而不是整卷比例
                 common = {t.id for t in tags} & {t.id for t in base_tags}
                 ps, pw = paired(base_tags, tags, "strict"), paired(base_tags, tags, "wide")
-                vs_s = _vs(ps, _rate(base_tags, common, "strict"), _rate(tags, common, "strict"))
-                vs_w = _vs(pw, _rate(base_tags, common, "wide"), _rate(tags, common, "wide"))
+                vs_s = _vs(ps, _rate(base_tags, common, "strict"), _rate(tags, common, "strict"), st.n)
+                vs_w = _vs(pw, _rate(base_tags, common, "wide"), _rate(tags, common, "wide"), st.n)
             lines.append(
                 f"| {run} | {st.n} | {_pct(st.finished)} | {_pct(st.declared)} | {_pct(st.degenerate)} "
                 f"| **{_pct(st.strict)}** | {_pct(st.rule_full)} | {_pct(st.wide)} | {st.chars_p50:,} "
@@ -246,11 +255,16 @@ def main() -> None:
             run_dir = runs_dir / run
             if not (run_dir / f"{s}.scored.jsonl").exists():
                 continue
-            results[s][run] = load_tags(run_dir, s) if args.from_tags else tag_run(run_dir, s, samples)
+            if args.from_tags or not (run_dir / f"{s}.outputs.jsonl").exists():
+                if not args.from_tags:
+                    print(f"  ! {run}/{s} 没有原始答卷,改读已入库的 usability.jsonl")
+                results[s][run] = load_tags(run_dir, s)
+            else:
+                results[s][run] = tag_run(run_dir, s, samples)
             st = SetStats.of(run, results[s][run])
             print(f"{s:11s} {run:10s} n={st.n:4d} 收尾 {_pct(st.finished):>6s} 严格 {_pct(st.strict):>6s} 宽 {_pct(st.wide):>6s}")
     notes = {
-        "base": "协议 v1 存档:max_tokens 2048,全量卷;与 v2 抽样卷配对时取交集",
+        "base": "协议 v1 存档:max_tokens 2048,全量卷。严格准确率主要受 2048 硬截断支配,不能当模型能力读;与 v2 抽样卷配对时取交集",
         "base-v2": "协议 v2:max_tokens 8192,temperature 0,固定种子抽样卷",
     }
     Path(args.out).write_text(render(results, args.baseline, sets, {k: v for k, v in notes.items() if k in runs}), "utf-8")

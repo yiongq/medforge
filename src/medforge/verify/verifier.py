@@ -1,9 +1,11 @@
 """验证器:判定模型输出是否答对。整个项目的灵魂部件。
 
 三层结构:
-  0. 截断守卫(免费,无条件):没写完的答卷直接判「未收尾」,不进规则层也不进 LLM 层。
+  0. 截断守卫(免费):没写完的答卷直接判「未收尾」,不进规则层也不进 LLM 层。
      思考型模型撞上 max_tokens 时末段多半是复读循环,规则层会从循环里刮出「答案:X」
-     判硬分(base-v2/cmexam 实测 94 题)——「没交卷」必须与「答错」「弃权」分开计数。
+     判硬分(base-v2/cmexam 实测 133 题)——「没交卷」必须与「答错」「弃权」分开计数。
+     两条腿:finish_reason=="length" 无条件;缺 finish_reason 时只能靠思考型口径
+     (thinking=True:没有 </think> 即未收尾)——存档答卷没有 finish_reason,重判必须显式开它。
   1. 规则层(免费,覆盖大多数):extract 抽答案 → 与 gold 比对
   2. LLM 层(兜底,按次付费):规则层弃权时,调 OpenAI 兼容接口判分
 
@@ -40,23 +42,25 @@ class Verdict:
 def split_answer(
     output: str, *, finish_reason: str | None = None, thinking: bool | None = None,
 ) -> tuple[str, str | None]:
-    """把答卷切成 (可判分的作答段, 未收尾原因);原因非 None 时作答段不得判分。
+    """把答卷切成 (作答段, 未收尾原因);原因非 None 时作答段不得判分。
 
-    thinking=None:自动——含 </think> 即按思考型输出处理,作答段取其后;
-    thinking=True:思考型口径——没有恰好一个 </think> 即未收尾(评测 Qwen3.5 时用);
-    finish_reason=="length":端点报告撞上 max_tokens,无条件未收尾——哪怕末段能刮出答案。
-    Qwen3.5 的 chat 模板吃掉了 <think> 开标签,输出里通常只剩收尾的 </think>。
+    作答段 = 最后一个 </think> 之后(没有就是全文;多个 </think> 实测只见「把收尾写了两遍」,取最后一个)。
+    未收尾只有两条腿:
+      - finish_reason == "length":端点报告撞上 max_tokens,无条件——哪怕末段能刮出答案;
+      - thinking=True 且没有 </think>:思考型口径,从未收尾的思考流不得判分。
+    thinking=None 是自动模式:含 </think> 就按思考型处理,否则当作非思考型输出全文判分——
+    它挡不住「缺 finish_reason 又没写出 </think>」的存档答卷,评测思考型模型必须显式 thinking=True
+    (eval CLI 默认 --thinking on)。Qwen3.5 的 chat 模板吃掉了 <think> 开标签,输出里通常只剩 </think>。
     """
-    if finish_reason == "length":
-        return output, "finish_reason=length"
     n = output.count(THINK_END)
+    segment = output.rsplit(THINK_END, 1)[1] if n else output
+    if finish_reason == "length":
+        return segment, "finish_reason=length"
     if thinking is None:
         thinking = n > 0
-    if not thinking:
-        return output, None
-    if n != 1:
-        return output, "no-think-close" if n == 0 else f"think-close×{n}"
-    return output.split(THINK_END, 1)[1], None
+    if thinking and n == 0:
+        return segment, "no-think-close"
+    return segment, None
 
 
 def _norm(text: str) -> str:
@@ -147,8 +151,8 @@ def verify(
     finish_reason: str | None = None,
     thinking: bool | None = None,
 ) -> Verdict:
-    """完整判分链:截断守卫 → 规则层 → LLM 兜底。守卫在最前且无条件——
-    extract 能从未收尾的答卷里刮出字母,恰恰是它要拦的情形。"""
+    """完整判分链:截断守卫 → 规则层 → LLM 兜底。守卫在最前,不看 extract 结果——
+    extract 能从未收尾的答卷里刮出字母,恰恰是它要拦的情形。thinking 的语义见 split_answer。"""
     answer, unfinished = split_answer(output, finish_reason=finish_reason, thinking=thinking)
     if unfinished is not None:
         return Verdict(None, "unfinished", unfinished)

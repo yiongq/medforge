@@ -15,7 +15,10 @@ W1a 审查修复记录(每条都有实测复现,见 tests/):
 W2 审查修复记录:
 - 多选延续段的分隔符曾含换行:「最终答案:B\\n\\nC 选项是干扰项」被抽成 BC → 只认行内空白
 - 评测提示词自己要求的连写格式「答案:ABD」抽不出 → 新增连写分支,但只认
-  「触发词 + 2~10 个升序大写字母 + 行尾」,且字母须在选项集合内(DIC/ECG/CEA 这类缩写因不升序被拒)
+  「触发词 + 2~10 个升序大写字母 + 行尾」且必须落在作答段最后一个非空行,字母须在选项集合内。
+  不升序的缩写(DIC/ECG/CEA)被拒;升序的(ACE/ADH/BCG)只能靠选项集合兜底,10 选项题兜不住——
+  所以再加一道:触发词前 12 字符内出现「如/例如/格式/format/write」即视为格式示例或排练,弃权
+  (思考型模型会原样复述提示词里的「如「答案:ABD」」,实测 25105 份存档里 6 份被它定案)
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ _EN_ANSWER_RE = re.compile(
     r"(?:the\s+answer\s+is|answer\s*:)\s*[\*\s]*\(?([A-Ja-j])\)?(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
+# 连写分支的否决线索:触发词紧跟在「如/例如/格式/format/write」之后,是在复述示例或排练格式,不是作答
+_EXAMPLE_CUE_RE = re.compile(r"(?:如|例如|比如|格式|format|write|写成|写)\s*[:: ]?\s*[「【\[(\"']*\s*$", re.IGNORECASE)
 _LETTERS_RE = re.compile(r"[A-Ja-j]")
 # boxed 内容整体是「字母+分隔」才算选择题答案;含其他文字(如 \boxed{肺栓塞})不算
 _BOXED_CHOICE_RE = re.compile(r"[A-Ja-j\s、,,和]+")
@@ -65,6 +70,12 @@ def _valid_multi(letters: str, options: Iterable[str] | None) -> bool:
     return options is None or set(letters) <= {k.upper() for k in options}
 
 
+def _last_line_start(tail: str) -> int:
+    """作答段最后一个非空行的起点:连写分支只认落在这一行上的声明(提示词要求「最后一行」)。"""
+    stripped = tail.rstrip()
+    return stripped.rfind("\n") + 1
+
+
 def extract_choice(output: str, options: Iterable[str] | None = None) -> Extracted | None:
     """选择题:只认显式的答案声明,且以最后一次声明为准(模型可能中途改口)。
 
@@ -79,7 +90,10 @@ def extract_choice(output: str, options: Iterable[str] | None = None) -> Extract
                 candidates.append((m.start(), letters))
     for m in _ANSWER_LINE_RE.finditer(tail):
         candidates.append((m.start(), _norm_letters(m.group(1))))
+    last_line = _last_line_start(tail)
     for m in _ANSWER_LINE_MULTI_RE.finditer(tail):
+        if m.start() < last_line or _EXAMPLE_CUE_RE.search(tail[max(0, m.start() - 12) : m.start()]):
+            continue
         if _valid_multi(m.group(1), options):
             candidates.append((m.start(), m.group(1)))
     for m in _EN_ANSWER_RE.finditer(tail):

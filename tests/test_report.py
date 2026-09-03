@@ -25,16 +25,16 @@ def test_review_abstain_counted_and_visible(tmp_path):
 
 
 def test_review_unfinished_split_from_abstain(tmp_path):
-    # 4 对 / 2 弃权 / 3 未收尾 / 1 错:三者都计错进分母,但未收尾与弃权必须分列
+    # 4 对 / 2 弃权 / 3 未收尾 / 1 缺失:全部计错进分母,但弃权 / 未收尾 / 缺失三列必须分开
     rows = (
         [{"id": i, "correct": True, "method": "rule"} for i in range(4)]
         + [{"id": 4 + i, "correct": None, "method": "abstain"} for i in range(2)]
         + [{"id": 6 + i, "correct": None, "method": "unfinished"} for i in range(3)]
-        + [{"id": 9, "correct": False, "method": "rule"}]
+        + [{"id": 9, "correct": None, "method": "missing"}]
     )
     p = tmp_path / "run.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
     r = load_run(p, "base")
-    assert (r.n, r.correct, r.abstained, r.unfinished) == (10, 4, 2, 3)
+    assert (r.n, r.correct, r.abstained, r.unfinished, r.missing) == (10, 4, 2, 3, 1)
     table = markdown_table([r])
-    assert "未收尾率" in table and "30.0%" in table and "20.0%" in table
+    assert "未收尾率" in table and "缺失率" in table and "30.0%" in table and "20.0%" in table and "10.0%" in table

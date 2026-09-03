@@ -216,7 +216,7 @@
 {"id": "medxpertqa-1389", "finished": false, "declared": false, "strict": false, "rule_full": true, "wide": true, "method": "rule", "chars": 31607, "cjk": 0.0009, "rep": 0.1938, "degenerate": false, "extracted": null}
 {"id": "medxpertqa-447", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 29914, "cjk": 0.0017, "rep": 0.8536, "degenerate": true, "extracted": null}
 {"id": "medxpertqa-1018", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 29361, "cjk": 0.0009, "rep": 0.9712, "degenerate": true, "extracted": null}
-{"id": "medxpertqa-784", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 20254, "cjk": 0.0492, "rep": 0.0597, "degenerate": false, "extracted": null}
+{"id": "medxpertqa-784", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 20254, "cjk": 0.0492, "rep": 0.0597, "degenerate": false, "extracted": "H"}
 {"id": "medxpertqa-2246", "finished": true, "declared": true, "strict": false, "rule_full": false, "wide": false, "method": "rule", "chars": 15335, "cjk": 0.034, "rep": 0.1055, "degenerate": false, "extracted": "H"}
 {"id": "medxpertqa-2406", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 28316, "cjk": 0.0, "rep": 0.6661, "degenerate": true, "extracted": null}
 {"id": "medxpertqa-1837", "finished": false, "declared": false, "strict": false, "rule_full": false, "wide": false, "method": "llm", "chars": 31745, "cjk": 0.0, "rep": 0.907, "degenerate": true, "extracted": null}

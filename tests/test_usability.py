@@ -88,3 +88,10 @@ def test_tag_run_roundtrip_and_paired(tmp_path):
     assert (p.n, p.a_only, p.b_only, p.both) == (4, 1, 2, 1)  # q1 只有 a 对;q2、q3 只有 b 对
     # 落盘回读与现算一致
     assert [t.strict for t in load_tags(tmp_path / "a", "syn")] == [t.strict for t in ta]
+    # 没有原始答卷时必须报错,不能把入库标签静默覆盖成全零
+    (tmp_path / "a" / "syn.outputs.jsonl").unlink()
+    import pytest
+
+    with pytest.raises(FileNotFoundError):
+        tag_run(tmp_path / "a", "syn", samples)
+    assert [t.strict for t in load_tags(tmp_path / "a", "syn")] == [t.strict for t in ta]
