@@ -103,6 +103,13 @@ class TestChoice:
         assert extract_choice("答案:ABD\n解析:A 项…") is None
         assert extract_choice("综上。\n答案:ABD\n") .value == "ABD"
 
+    def test_declared_abstain(self):
+        # 弃权提示词变体:「答案:不确定」是主动弃权,不是抽不出
+        e = extract_choice("各选项都有可能,答案:不确定")
+        assert e is not None and e.kind == "abstain"
+        assert extract_choice("答案:不确定……再想想,最终答案:B").value == "B"   # 最后一次声明为准
+        assert extract_choice("答案:B。不过我不确定。").value == "B"           # 「不确定」不在声明位置不算
+
     def test_review_newline_breaks_continuation(self):
         # 曾把下一段开头的「C 选项」并进多选,抽成 BC
         assert extract_choice("最终答案:B\n\nC 选项是干扰项。").value == "B"
@@ -120,3 +127,7 @@ class TestText:
 
     def test_abstain_on_free_ending(self):
         assert extract_text("因此患者最可能患有肺结核,建议进一步查痰。") is None
+
+    def test_declared_abstain_text(self):
+        assert extract_text("最终答案:不确定").kind == "abstain"
+        assert extract_text("最终答案:不确定\n再想想。\n最终答案:苯妥英钠").value == "苯妥英钠"  # 最后一次声明为准

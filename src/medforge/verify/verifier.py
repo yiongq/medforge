@@ -72,6 +72,9 @@ def verify_by_rule(sample: Sample, output: str) -> Verdict | None:
     ext = extract(output, sample.is_choice, options=sample.options)
     if ext is None:
         return None
+    if ext.kind == "abstain":
+        # 主动弃权:计错进分母(与验证器弃权同列),但 detail 标 declared 以便分开统计;不再花钱问 judge
+        return Verdict(None, "abstain", "declared")
     if sample.is_choice:
         gold = "".join(sorted(sample.gold.upper()))
         return Verdict(ext.value == gold, "rule", f"extracted={ext.value} gold={gold}")

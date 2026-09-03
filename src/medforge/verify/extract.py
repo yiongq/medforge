@@ -48,6 +48,8 @@ _EN_ANSWER_RE = re.compile(
 )
 # 连写分支的否决线索:触发词紧跟在「如/例如/格式/format/write」之后,是在复述示例或排练格式,不是作答
 _EXAMPLE_CUE_RE = re.compile(r"(?:如|例如|比如|格式|format|write|写成|写)\s*[:: ]?\s*[「【\[(\"']*\s*$", re.IGNORECASE)
+# 主动弃权声明:「答案:不确定」。弃权提示词变体要求这样写;它是「能力」,与验证器判不了的「弃权」分开记
+_ABSTAIN_RE = re.compile(r"(?:最终答案|答案)\s*(?:是|为|:|:)?\s*[\*\s「【\[(]*(不确定|无法确定|不知道|弃权|放弃作答)")
 _LETTERS_RE = re.compile(r"[A-Ja-j]")
 # boxed 内容整体是「字母+分隔」才算选择题答案;含其他文字(如 \boxed{肺栓塞})不算
 _BOXED_CHOICE_RE = re.compile(r"[A-Ja-j\s、,,和]+")
@@ -55,8 +57,15 @@ _BOXED_CHOICE_RE = re.compile(r"[A-Ja-j\s、,,和]+")
 
 @dataclass
 class Extracted:
-    kind: str    # "choice" | "text"
-    value: str   # choice: 规范化选项字母(多选按字典序连写,如 "ACD");text: 答案原文
+    kind: str    # "choice" | "text" | "abstain"
+    value: str   # choice: 规范化选项字母(多选按字典序连写,如 "ACD");text: 答案原文;abstain: 声明原文
+
+
+def _last_abstain(tail: str) -> tuple[int, str] | None:
+    m = None
+    for m in _ABSTAIN_RE.finditer(tail):
+        pass
+    return (m.start(), m.group(1)) if m else None
 
 
 def _norm_letters(raw: str) -> str:
@@ -98,6 +107,9 @@ def extract_choice(output: str, options: Iterable[str] | None = None) -> Extract
             candidates.append((m.start(), m.group(1)))
     for m in _EN_ANSWER_RE.finditer(tail):
         candidates.append((m.start(), m.group(1).upper()))
+    abstain = _last_abstain(tail)
+    if abstain and (not candidates or abstain[0] > max(c[0] for c in candidates)):
+        return Extracted("abstain", abstain[1])  # 最后一次声明是弃权:以它为准
     if not candidates:
         return None
     candidates.sort(key=lambda c: c[0])
@@ -107,12 +119,15 @@ def extract_choice(output: str, options: Iterable[str] | None = None) -> Extract
 def extract_text(output: str) -> Extracted | None:
     """开放题:只认 boxed 或「答案:...」整行声明;自由结尾不猜,交给 LLM 层。"""
     tail = _WRAP_RE.sub(r"\1", output[-2000:])
-    boxed = _BOXED_RE.findall(tail)
-    if boxed:
-        return Extracted("text", boxed[-1].strip())
+    abstain = _last_abstain(tail)
+    boxed = list(_BOXED_RE.finditer(tail))
+    if boxed and not (abstain and abstain[0] > boxed[-1].start()):
+        return Extracted("text", boxed[-1].group(1).strip())
     m = None
     for m in re.finditer(r"(?:最终答案|答案)\s*(?:是|为|:|:)\s*(.+)", tail):
         pass
+    if abstain and (m is None or abstain[0] >= m.start()):
+        return Extracted("abstain", abstain[1])
     if m:
         value = m.group(1).strip().rstrip("。.」】")
         if value:

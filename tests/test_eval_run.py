@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import ClassVar
 
 import pytest
 
@@ -26,14 +27,22 @@ SCRIPT = {
 
 
 class _Handler(BaseHTTPRequestHandler):
+    seen_prompts: ClassVar[list[str]] = []  # 记录收到的提示词,测试提示词变体与 budget forcing 的裸 prompt
+
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        prompt = body["messages"][0]["content"]
-        answer, reason = next((v for k, v in SCRIPT.items() if f"题号{k}" in prompt), ("答案:E", "stop"))
-        resp = {
-            "choices": [{"message": {"role": "assistant", "content": answer}, "finish_reason": reason}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": len(answer)},
-        }
+        if self.path.endswith("/completions") and "messages" not in body:
+            # budget forcing 的续写请求:裸 prompt 以「答案:」结尾,续写一个字母
+            _Handler.seen_prompts.append(body["prompt"])
+            resp = {"choices": [{"text": " B", "finish_reason": "stop"}], "usage": {"completion_tokens": 1}}
+        else:
+            prompt = body["messages"][0]["content"]
+            _Handler.seen_prompts.append(prompt)
+            answer, reason = next((v for k, v in SCRIPT.items() if f"题号{k}" in prompt), ("答案:E", "stop"))
+            resp = {
+                "choices": [{"message": {"role": "assistant", "content": answer}, "finish_reason": reason}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": len(answer)},
+            }
         data = json.dumps(resp).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -125,3 +134,26 @@ def test_thinking_mode_changes_archive_scoring(mock_server, tmp_path):
     r_on = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False, thinking=True), "on")
     r_auto = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False), "auto")
     assert (r_on.correct, r_on.unfinished) == (0, 1) and (r_auto.correct, r_auto.unfinished) == (1, 0)
+
+
+def test_budget_forcing_rescues_truncated_answer(mock_server, tmp_path):
+    # q4 撞上限(finish_reason=length):plain 模式判未收尾;budget-forcing 接回思考流强写「</think>\n\n答案:」再续写
+    from medforge.eval.run import FORCE_PREFIX
+
+    _Handler.seen_prompts.clear()
+    samples = [_sample("q4", "B")]
+    scored = run_set("f", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False,
+                     thinking=True, gen={"mode": "budget-forcing"})
+    row = json.loads(scored.read_text().splitlines()[0])
+    assert row["correct"] is True and row["forced"] is True and row["finish_reason"] == "stop"
+    out = json.loads((tmp_path / "f.outputs.jsonl").read_text().splitlines()[0])
+    assert out["output"].endswith("</think>\n\n答案: B") and out["forced"] is True
+    raw = [p for p in _Handler.seen_prompts if p.startswith("<|im_start|>user")]
+    assert len(raw) == 1 and raw[0].startswith(FORCE_PREFIX.split("{prompt}")[0]) and raw[0].endswith("\n</think>\n\n答案:")
+
+
+def test_abstain_prompt_variant(mock_server, tmp_path):
+    _Handler.seen_prompts.clear()
+    run_set("a", [_sample("q1", "B")], tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False,
+            gen={"prompt_variant": "abstain"})
+    assert any("答案:不确定" in p for p in _Handler.seen_prompts)
