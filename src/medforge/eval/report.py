@@ -126,6 +126,9 @@ def mcnemar_exact(b: int, c: int) -> float:
 
 @dataclass
 class Paired:
+    """同一批题上 A、B 两个 run 的配对结果(Miller 2024《Adding Error Bars to Evals》推荐的报法:
+    配对差值 + 配对标准误 + 相关系数,而不是两个独立区间看重叠)。"""
+
     n: int          # 两个 run 共同作答的题数
     a_only: int     # 只有 A 对
     b_only: int     # 只有 B 对
@@ -140,6 +143,34 @@ class Paired:
     def delta(self) -> float:
         """B 相对 A 的准确率差(比例)。"""
         return (self.b_only - self.a_only) / self.n if self.n else 0.0
+
+    @property
+    def se(self) -> float:
+        """配对差值的标准误:逐题 d_i ∈ {-1, 0, +1},Σd = b_only − a_only,Σd² = a_only + b_only。"""
+        if self.n < 2:
+            return 0.0
+        sum_d, sum_d2 = self.b_only - self.a_only, self.a_only + self.b_only
+        var = max(0.0, (sum_d2 - sum_d * sum_d / self.n) / (self.n - 1))
+        return math.sqrt(var / self.n)
+
+    def ci(self, z: float = 1.96) -> tuple[float, float]:
+        return (self.delta - z * self.se, self.delta + z * self.se)
+
+    @property
+    def phi(self) -> float:
+        """两个 run 逐题对错的相关系数(2×2 表的 φ):越高说明两者错在同一批题上,配对检验越有功效。"""
+        a1, a0 = self.both + self.a_only, self.b_only + self.neither
+        b1, b0 = self.both + self.b_only, self.a_only + self.neither
+        denom = math.sqrt(a1 * a0 * b1 * b0)
+        return (self.both * self.neither - self.a_only * self.b_only) / denom if denom else 0.0
+
+    def mde(self, z_alpha: float = 1.96, z_power: float = 0.84) -> float:
+        """最小可检出差异(α=0.05 双侧、功效 0.8):(z_α + z_β)·√(不一致率 / n)。
+        「未检出差异」只有配上它才有意义——n=280 的卷 MDE 往往有 7~8pp。"""
+        if not self.n:
+            return 0.0
+        discordant = (self.a_only + self.b_only) / self.n
+        return (z_alpha + z_power) * math.sqrt(discordant / self.n)
 
 
 def paired_counts(a: dict[str, bool], b: dict[str, bool]) -> Paired:
@@ -157,3 +188,31 @@ def paired_counts(a: dict[str, bool], b: dict[str, bool]) -> Paired:
         else:
             neither += 1
     return Paired(len(ids), a_only, b_only, both, neither)
+
+
+def holm(pvalues: list[float], alpha: float = 0.05) -> list[bool]:
+    """Holm 逐步校正(控 FWER):按 p 升序,第 i 个的阈值是 α/(m−i+1),一旦有一个不过后面全不过。"""
+    m = len(pvalues)
+    order = sorted(range(m), key=lambda i: pvalues[i])
+    passed = [False] * m
+    for rank, i in enumerate(order):
+        if pvalues[i] <= alpha / (m - rank):
+            passed[i] = True
+        else:
+            break
+    return passed
+
+
+def benjamini_hochberg(pvalues: list[float], alpha: float = 0.05) -> list[bool]:
+    """BH 校正(控 FDR):按 p 升序,找最大的 k 使 p_(k) ≤ k·α/m,前 k 个全过。"""
+    m = len(pvalues)
+    order = sorted(range(m), key=lambda i: pvalues[i])
+    k_max = 0
+    for rank, i in enumerate(order, start=1):
+        if pvalues[i] <= rank * alpha / m:
+            k_max = rank
+    passed = [False] * m
+    for rank, i in enumerate(order, start=1):
+        if rank <= k_max:
+            passed[i] = True
+    return passed

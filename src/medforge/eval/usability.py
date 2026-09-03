@@ -32,7 +32,7 @@ from pathlib import Path
 from statistics import median
 
 from medforge.data.schema import Sample
-from medforge.eval.report import Paired, load_verdicts, paired_counts
+from medforge.eval.report import Paired, benjamini_hochberg, holm, load_verdicts, paired_counts
 from medforge.verify.extract import extract
 from medforge.verify.verifier import split_answer, verify_by_rule
 
@@ -42,6 +42,8 @@ from medforge.verify.verifier import split_answer, verify_by_rule
 REP_WINDOW = 4000
 REP_N = 12
 REP_THRESHOLD = 0.5
+# 进多重比较校正族的臂:协议 v2 下训练出来的配方;存档 v1(base)只是协议对照
+NON_ARCHIVE = {"sft-v2", "sft-r1-v2", "dpo-v2"}
 
 
 def tail_repetition(text: str, n: int = REP_N, window: int = REP_WINDOW) -> float:
@@ -164,9 +166,15 @@ def _rate(tags: list[Tag], ids: set[str], attr: str) -> float:
     return sum(getattr(t, attr) for t in tags if t.id in ids) / (len(ids) or 1)
 
 
-def _vs(p: Paired, stat_a: float, stat_b: float, n_total: int) -> str:
+def _vs(p: Paired, stat_a: float, stat_b: float, n_total: int, holm_ok: bool | None, bh_ok: bool | None) -> str:
+    """一格里放齐 Miller 2024 要求的东西:配对差值 + 95% CI + 相关系数 + 配对 p + 多重比较校正结论。"""
+    lo, hi = p.ci()
     n = f" · n={p.n}" if p.n != n_total else ""
-    return f"{(stat_b - stat_a) * 100:+.1f}pp{n} · 独对 {p.a_only}/{p.b_only} · p={p.p_value:.4f}"
+    corr = "" if holm_ok is None else f" · Holm{'✓' if holm_ok else '✗'}/BH{'✓' if bh_ok else '✗'}"
+    return (
+        f"{(stat_b - stat_a) * 100:+.1f}pp [{lo * 100:+.1f}, {hi * 100:+.1f}]{n} · φ={p.phi:.2f}"
+        f" · 独对 {p.a_only}/{p.b_only} · p={p.p_value:.4f}{corr}"
+    )
 
 
 def render(
@@ -193,10 +201,40 @@ def render(
         f"- **退化率**:末 {REP_WINDOW} 字符的 {REP_N}-gram 重复率 ≥ {REP_THRESHOLD}。语言无关;",
         "  标定(v2 存档):写完的答卷 p99 ≤ 0.37,0.5 之上几乎不含写完的答卷;未收尾答卷中位 0.57~0.98,",
         "  约三成未收尾答卷落在 0.5 以下(被掐断时尚未进入复读)——它是单侧指标,不是截断的代理。",
-        "- **vs 基线**:同一批题配对,McNemar 精确检验(双侧);「独对 a/b」= 只有基线对 / 只有本 run 对;",
-        "  pp 差值按配对子集算(v1 全量卷与 v2 抽样卷配对时取交集,n 标在格内),与整卷的严格准确率相减对不上是正常的。",
+        "- **vs 基线**:同一批题配对。格内依次是:配对差值与其 95% CI(逐题差分的标准误,Miller 2024)、",
+        "  φ(两臂逐题对错的相关系数,越高配对检验越有功效)、「独对 a/b」= 只有基线对 / 只有本 run 对、",
+        "  McNemar 精确检验双侧 p、Holm / BH 多重比较校正是否通过。pp 差值按配对子集算",
+        "  (v1 全量卷与 v2 抽样卷配对时取交集,n 标在格内),与整卷的严格准确率相减对不上是正常的。",
         "",
         "所有 run 考的是同一批固定种子抽样题,可逐题配对;v1 存档(base)是全量卷,配对时取交集。",
+        "",
+    ]
+    # 先算完全部配对比较,再做多重比较校正:校正族 = 非存档臂 × 三卷(严格与宽口径各一族),
+    # 存档 v1 的 base 行不进族(它是协议对照,不是「哪个配方更好」的假设)
+    comps: dict[tuple[str, str, str], tuple[Paired, float, float, int]] = {}
+    for s in sets:
+        base_tags = results[s].get(baseline)
+        if base_tags is None:
+            continue
+        for run, tags in results[s].items():
+            if run == baseline:
+                continue
+            common = {t.id for t in tags} & {t.id for t in base_tags}
+            for attr in ("strict", "wide"):
+                comps[(s, run, attr)] = (
+                    paired(base_tags, tags, attr), _rate(base_tags, common, attr), _rate(tags, common, attr), len(tags),
+                )
+    family = {attr: [k for k in comps if k[2] == attr and k[1] in NON_ARCHIVE] for attr in ("strict", "wide")}
+    corrected: dict[tuple[str, str, str], tuple[bool, bool]] = {}
+    for attr, keys in family.items():
+        ps = [comps[k][0].p_value for k in keys]
+        for k, h, b in zip(keys, holm(ps), benjamini_hochberg(ps)):
+            corrected[k] = (h, b)
+    lines += [
+        (
+            f"多重比较校正:严格口径与宽口径各自一族({len(family['strict'])} 项:非存档臂 × 三卷),"
+            "Holm 控 FWER、BH 控 FDR,均取 α=0.05;存档 v1 行不进族。"
+        ),
         "",
     ]
     for s in sets:
@@ -210,20 +248,30 @@ def render(
             ),
             "|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
+        mdes = []
         for run, tags in runs.items():
             st = SetStats.of(run, tags)
             if base_tags is None or run == baseline:
                 vs_s = vs_w = "—"
             else:
-                # 配对子集上的差值:v1 全量卷与 v2 抽样卷交集时,用子集内的比例而不是整卷比例
-                common = {t.id for t in tags} & {t.id for t in base_tags}
-                ps, pw = paired(base_tags, tags, "strict"), paired(base_tags, tags, "wide")
-                vs_s = _vs(ps, _rate(base_tags, common, "strict"), _rate(tags, common, "strict"), st.n)
-                vs_w = _vs(pw, _rate(base_tags, common, "wide"), _rate(tags, common, "wide"), st.n)
+                cells = []
+                for attr in ("strict", "wide"):
+                    p, ra, rb, n_total = comps[(s, run, attr)]
+                    h, b = corrected.get((s, run, attr), (None, None))
+                    cells.append(_vs(p, ra, rb, n_total, h, b))
+                    if attr == "strict" and run in NON_ARCHIVE:
+                        mdes.append(p.mde())
+                vs_s, vs_w = cells
             lines.append(
                 f"| {run} | {st.n} | {_pct(st.finished)} | {_pct(st.declared)} | {_pct(st.degenerate)} "
                 f"| **{_pct(st.strict)}** | {_pct(st.rule_full)} | {_pct(st.wide)} | {st.chars_p50:,} "
                 f"| {_pct(st.cjk_p50)} | {vs_s} | {vs_w} |"
+            )
+        if mdes:
+            lines.append("")
+            lines.append(
+                f"本卷严格口径的最小可检出差异(α=0.05,功效 0.8)约 {min(mdes) * 100:.1f}~{max(mdes) * 100:.1f}pp;"
+                "「未检出差异」只表示效应小于这个量级。"
             )
         lines.append("")
     if run_notes:
