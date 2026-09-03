@@ -2,7 +2,15 @@
 
 import json
 
-from medforge.eval.report import RunResult, load_run, markdown_table
+from medforge.eval.report import (
+    Paired,
+    RunResult,
+    benjamini_hochberg,
+    holm,
+    load_run,
+    markdown_table,
+    paired_counts,
+)
 
 
 def test_wilson_ci_reference_values():
@@ -51,3 +59,36 @@ def test_declared_abstain_is_subset_of_abstained(tmp_path):
     r = load_run(p, "x")
     assert (r.abstained, r.declared) == (2, 1)
     assert "主动 33.3%" in markdown_table([r])
+
+
+def test_paired_se_ci_phi_mde():
+    # 2000 题:双方都对 1600 / 只 A 对 100 / 只 B 对 150 / 都错 150
+    p = Paired(n=2000, a_only=100, b_only=150, both=1600, neither=150)
+    assert abs(p.delta - 0.025) < 1e-9
+    # Σd = 50, Σd² = 250 → var = (250 − 50²/2000)/1999 = 0.124437…, se = √(var/2000) ≈ 0.00789
+    assert abs(p.se - 0.00789) < 1e-4
+    lo, hi = p.ci()
+    assert lo < 0.025 < hi and abs((hi - lo) / 2 - 1.96 * p.se) < 1e-9
+    assert 0 < p.phi < 1  # 错在同一批题上:正相关
+    assert abs(p.mde() - 2.8 * (0.125 / 2000) ** 0.5) < 1e-9  # 不一致率 250/2000
+    assert Paired(n=0, a_only=0, b_only=0, both=0, neither=0).mde() == 0.0
+
+
+def test_paired_counts_and_correlation():
+    a = {"q1": True, "q2": True, "q3": False, "q4": False}
+    b = {"q1": True, "q2": False, "q3": True, "q4": False, "q5": True}  # q5 不在交集
+    p = paired_counts(a, b)
+    assert (p.n, p.a_only, p.b_only, p.both, p.neither) == (4, 1, 1, 1, 1)
+    assert p.phi == 0.0
+
+
+def test_holm_and_bh_reference():
+    # 经典例子:p = [0.01, 0.02, 0.03, 0.04, 0.05],m=5
+    ps = [0.01, 0.02, 0.03, 0.04, 0.05]
+    # Holm:0.01 ≤ 0.05/5 ✓;0.02 ≤ 0.05/4=0.0125 ✗ → 后面全不过
+    assert holm(ps) == [True, False, False, False, False]
+    # BH:p_(k) ≤ k·0.05/5 → 0.01≤0.01 ✓ 0.02≤0.02 ✓ 0.03≤0.03 ✓ 0.04≤0.04 ✓ 0.05≤0.05 ✓ → 全过
+    assert benjamini_hochberg(ps) == [True] * 5
+    # 顺序无关:乱序输入返回按原位置的结论(m=2:0.01 ≤ 0.025 过,0.06 > 0.05 不过)
+    assert holm([0.06, 0.01]) == [False, True]
+    assert holm([]) == [] and benjamini_hochberg([]) == []
