@@ -151,7 +151,9 @@ def _gen_outputs(
             c0 = cont.choices[0]
             c_usage = getattr(cont, "usage", None)
             row["output"] = row["output"].rstrip("\n") + suffix + (c0.text or "")
-            row["finish_reason"] = c0.finish_reason
+            # 续写的 finish_reason 只描述那 32 个 token 是否写满,与「答案有没有写出来」无关——
+            # 答案触发词是我们强写的,守卫不该再按 length 判未收尾;保留原值供审计,加前缀区分
+            row["finish_reason"] = f"forced-{c0.finish_reason}"
             row["completion_tokens"] = (row["completion_tokens"] or 0) + (getattr(c_usage, "completion_tokens", 0) or 0)
             row["forced"] = True
         return row
@@ -219,9 +221,11 @@ def run_set(
             if row is None:
                 v_correct, method, detail = None, "missing", ""  # 生成失败的题:弃权口径计错,不静默跳过
             else:
+                finish_reason = row.get("finish_reason")
+                if row.get("forced") and finish_reason == "length":
+                    finish_reason = "forced-length"  # 修复前落盘的 forced 行:续写撞 32 token 上限不等于未收尾
                 v = verify(
-                    s, row["output"], allow_llm=allow_llm_judge,
-                    finish_reason=row.get("finish_reason"), thinking=thinking,
+                    s, row["output"], allow_llm=allow_llm_judge, finish_reason=finish_reason, thinking=thinking,
                 )
                 v_correct, method, detail = v.correct, v.method, v.detail
             f.write(json.dumps({
