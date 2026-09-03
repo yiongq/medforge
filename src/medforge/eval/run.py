@@ -101,6 +101,7 @@ def _gen_outputs(
     seed: int = 42,
     prompt_variant: str = "default",
     mode: str = "plain",
+    timeout: float = 300.0,
 ) -> dict[str, dict]:
     """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens", "forced"}}。"""
     from openai import OpenAI
@@ -118,7 +119,8 @@ def _gen_outputs(
     if not todo:
         return outputs
 
-    client = OpenAI(base_url=base_url, api_key=api_key, timeout=300, max_retries=2)
+    # timeout 按预算定:贪心复读到 32768 token 一条请求要十来分钟,300 秒会把整臂超时打成 missing
+    client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=2)
     lock = threading.Lock()
     f = out_file.open("a", encoding="utf-8")
 
@@ -310,6 +312,7 @@ def main() -> None:
     ap.add_argument("--sets", default=",".join(EVAL_SOURCES))
     ap.add_argument("--limit", type=int, default=0, help="每套只跑前 N 题(冒烟用)")
     ap.add_argument("--concurrency", type=int, default=16)
+    ap.add_argument("--timeout", type=float, default=300.0, help="单条请求超时秒数;32768 预算的贪心臂要给 3600")
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
     # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
     ap.add_argument("--max-tokens", type=int, default=8192)
@@ -350,11 +353,11 @@ def main() -> None:
     gen = {
         "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": args.min_p,
         "presence_penalty": args.presence_penalty, "seed": args.seed,
-        "prompt_variant": args.prompt, "mode": args.mode,
+        "prompt_variant": args.prompt, "mode": args.mode, "timeout": args.timeout,
     }
     meta = {
         "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint,
-        "max_tokens": args.max_tokens, **{k: v for k, v in gen.items() if k != "prompt_variant"},
+        "max_tokens": args.max_tokens, **{k: v for k, v in gen.items() if k not in ("prompt_variant", "timeout")},
         "prompt": args.prompt, "prompt_sha": prompt_sha(args.prompt),
         "samples": sample_map, "limit": args.limit,
         "thinking": args.thinking, "llm_judge": not args.no_llm_judge,

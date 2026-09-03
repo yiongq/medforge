@@ -59,7 +59,7 @@ assert all("</think>" in r["output"] or r["finish_reason"] == "length" for r in 
 PY
       ;;
     greedy)    run base-v3-greedy    --max-tokens 8192 ;;
-    greedy32k) run base-v3-greedy32k --max-tokens 32768 ;;
+    greedy32k) run base-v3-greedy32k --max-tokens 32768 --timeout 3600 ;;   # 复读跑满 32k 要十来分钟
     sample)    run base-v3-sample    --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 1.5 --max-tokens 32768 --seed 42 ;;
     forcing)   run base-v3-forcing   --max-tokens 8192 --mode budget-forcing ;;
     abstain)   run base-v3-abstain   --max-tokens 8192 --prompt abstain ;;
