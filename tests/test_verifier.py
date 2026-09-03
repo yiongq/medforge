@@ -81,6 +81,11 @@ class TestTruncationGuard:
         v = verify(choice("C"), "答案:C 但我不确定</think>各选项都有道理。", allow_llm=False)
         assert v.correct is None and v.method == "abstain"
 
+    def test_declared_abstain_is_abstain_without_judge(self):
+        # allow_llm=True 但不该触网:主动弃权由规则层直接定案
+        v = verify(choice("C"), "把握不大。</think>答案:不确定", allow_llm=True)
+        assert v.correct is None and v.method == "abstain" and v.detail == "declared"
+
     def test_non_thinking_output_unchanged(self):
         assert verify(choice("C"), "综合分析,答案是 C。", allow_llm=False).correct is True
 

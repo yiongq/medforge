@@ -38,3 +38,16 @@ def test_review_unfinished_split_from_abstain(tmp_path):
     assert (r.n, r.correct, r.abstained, r.unfinished, r.missing) == (10, 4, 2, 3, 1)
     table = markdown_table([r])
     assert "未收尾率" in table and "缺失率" in table and "30.0%" in table and "20.0%" in table and "10.0%" in table
+
+
+def test_declared_abstain_is_subset_of_abstained(tmp_path):
+    rows = [
+        {"id": 0, "correct": True, "method": "rule"},
+        {"id": 1, "correct": None, "method": "abstain", "detail": "declared"},
+        {"id": 2, "correct": None, "method": "abstain", "detail": ""},
+    ]
+    p = tmp_path / "run.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    r = load_run(p, "x")
+    assert (r.abstained, r.declared) == (2, 1)
+    assert "主动 33.3%" in markdown_table([r])

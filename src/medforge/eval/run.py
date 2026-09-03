@@ -49,13 +49,36 @@ PROMPT_CHOICE = (
     "(多选题写出全部字母,如「答案:ABD」)。\n\n{question}"
 )
 PROMPT_OPEN = "你是医学助手,回答下面的问题。先给出推理过程,最后一行以「最终答案:」开头给出结论。\n\n{question}"
+# 弃权变体(P2 对照臂 d):唯一差别是允许说「不确定」。用来量「弃权能力是不是 prompt 就能拿到的」
+PROMPT_CHOICE_ABSTAIN = (
+    "以下是一道医学选择题,请先简要推理,最后一行以「答案:X」的格式给出选项字母"
+    "(多选题写出全部字母,如「答案:ABD」);如果没有把握,最后一行写「答案:不确定」,不要猜。\n\n{question}"
+)
+PROMPT_OPEN_ABSTAIN = (
+    "你是医学助手,回答下面的问题。先给出推理过程,最后一行以「最终答案:」开头给出结论;"
+    "如果没有把握,最后一行写「最终答案:不确定」,不要猜。\n\n{question}"
+)
+PROMPTS = {"default": (PROMPT_CHOICE, PROMPT_OPEN), "abstain": (PROMPT_CHOICE_ABSTAIN, PROMPT_OPEN_ABSTAIN)}
+
+# budget forcing(P2 对照臂 c,s1 式):撞上 max_tokens 时把思考流原样接回去、强行写上收尾与答案触发词,
+# 再让模型续写几十个 token。走 /v1/completions 裸 prompt,所以要自己渲染 chat 模板——
+# 下面是 Qwen3.5 的 chat_template.jinja(2026-09-03 核对)对 [user] + add_generation_prompt 的渲染结果,
+# 思考模式下生成提示以 <think>\n 结尾,所以模型输出里只有收尾的 </think>。换基座必须重新核对。
+FORCE_PREFIX = "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n"
+FORCE_SUFFIX_CHOICE = "\n</think>\n\n答案:"
+FORCE_SUFFIX_OPEN = "\n</think>\n\n最终答案:"
+FORCE_MAX_TOKENS = 32
+MODES = ("plain", "budget-forcing")
 
 # 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径
 PROTOCOL_KEYS = (
     "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
-    "prompt_sha", "samples", "limit", "thinking", "llm_judge",
+    "prompt", "prompt_sha", "mode", "samples", "limit", "thinking", "llm_judge",
 )
-PROMPT_SHA = hashlib.sha256((PROMPT_CHOICE + "\n" + PROMPT_OPEN).encode()).hexdigest()[:8]
+
+
+def prompt_sha(variant: str) -> str:
+    return hashlib.sha256("\n".join(PROMPTS[variant]).encode()).hexdigest()[:8]
 THINKING_MODES = {"on": True, "off": False, "auto": None}
 MAX_FAIL_RATE = 0.02  # 生成失败超过这个比例就不出表:一张 0% 的 summary 与一次成功评测在退出码上不可区分
 JUDGE_ENV = ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
@@ -75,8 +98,10 @@ def _gen_outputs(
     top_k: int = -1,
     presence_penalty: float = 0.0,
     seed: int = 42,
+    prompt_variant: str = "default",
+    mode: str = "plain",
 ) -> dict[str, dict]:
-    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens"}}。"""
+    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens", "forced"}}。"""
     from openai import OpenAI
 
     outputs: dict[str, dict] = {}
@@ -96,25 +121,39 @@ def _gen_outputs(
     lock = threading.Lock()
     f = out_file.open("a", encoding="utf-8")
 
+    p_choice, p_open = PROMPTS[prompt_variant]
+    # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
+    # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
+    sampling = {"temperature": temperature, "top_p": top_p, "presence_penalty": presence_penalty, "seed": seed}
+    extra = {"top_k": top_k}  # vLLM 私有参数(-1 = 不限),OpenAI SDK 不认所以走 extra_body
+
     def gen_one(s: Sample) -> dict:
-        prompt = (PROMPT_CHOICE if s.is_choice else PROMPT_OPEN).format(question=s.render_question())
-        # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
-        # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
+        prompt = (p_choice if s.is_choice else p_open).format(question=s.render_question())
         resp = client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": prompt}],
-            temperature=temperature, top_p=top_p, presence_penalty=presence_penalty,
-            seed=seed,  # 逐请求下发:采样协议也可复现
-            max_tokens=max_tokens,
-            extra_body={"top_k": top_k},  # vLLM 私有参数(-1 = 不限),OpenAI SDK 不认所以走 extra_body
+            max_tokens=max_tokens, extra_body=extra, **sampling,
         )
         ch = resp.choices[0]
         usage = getattr(resp, "usage", None)
-        return {
+        row = {
             "id": s.id,
             "output": ch.message.content or "",
             "finish_reason": ch.finish_reason,
             "completion_tokens": getattr(usage, "completion_tokens", None) if usage else None,
+            "forced": False,
         }
+        if mode == "budget-forcing" and row["output"] and ch.finish_reason == "length":
+            # 强制收尾:思考流原样接回,写上 </think> 与答案触发词,续写几十个 token
+            suffix = FORCE_SUFFIX_CHOICE if s.is_choice else FORCE_SUFFIX_OPEN
+            raw = FORCE_PREFIX.format(prompt=prompt) + row["output"].rstrip("\n") + suffix
+            cont = client.completions.create(model=model, prompt=raw, max_tokens=FORCE_MAX_TOKENS, extra_body=extra, **sampling)
+            c0 = cont.choices[0]
+            c_usage = getattr(cont, "usage", None)
+            row["output"] = row["output"].rstrip("\n") + suffix + (c0.text or "")
+            row["finish_reason"] = c0.finish_reason
+            row["completion_tokens"] = (row["completion_tokens"] or 0) + (getattr(c_usage, "completion_tokens", 0) or 0)
+            row["forced"] = True
+        return row
 
     done = failed = 0
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -163,7 +202,7 @@ def run_set(
     """跑一套考卷,返回 scored 文件路径。判分与 DPO 构造共用 verify()——口径唯一。
 
     thinking=True 时按思考型口径:没有 </think> 即判未收尾;None 为自动(语义见 verifier.split_answer)。
-    gen 是解码参数(temperature/top_p/top_k/presence_penalty/seed),缺省即 v2 贪心。
+    gen 是解码参数(temperature/top_p/top_k/presence_penalty/seed/prompt_variant/mode),缺省即 v2 贪心。
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     rprint(f"[bold]▶ {name}[/]({len(samples)} 题)")
@@ -188,7 +227,8 @@ def run_set(
                 "id": s.id, "correct": v_correct, "method": method,
                 "finish_reason": (row or {}).get("finish_reason"),
                 "completion_tokens": (row or {}).get("completion_tokens"),
-                "detail": detail if method == "unfinished" else "",
+                "forced": bool((row or {}).get("forced")),
+                "detail": detail if method in ("unfinished", "abstain") else "",
             }, ensure_ascii=False) + "\n")
     r = load_run(scored_file, name)
     rprint(
@@ -244,7 +284,7 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
 def protocol_line(meta: dict) -> str:
     keys = (
         "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
-        "prompt_sha", "thinking", "llm_judge", "git",
+        "prompt", "prompt_sha", "mode", "thinking", "llm_judge", "git",
     )
     parts = [f"{k}={meta.get(k)}" for k in keys]
     parts.append("抽样=" + (",".join(f"{k}={v}" for k, v in meta["samples"].items()) if meta.get("samples") else "全量"))
@@ -279,6 +319,11 @@ def main() -> None:
         help="截断守卫口径:on = 没有 </think> 即判未收尾(默认,思考型模型);off = 全文判分;auto = 含 </think> 才按思考型",
     )
     ap.add_argument("--adopt-legacy", action="store_true", help="给 W2 之前没有 run_meta.json 的存档目录补写协议指纹")
+    ap.add_argument("--prompt", choices=sorted(PROMPTS), default="default", help="提示词变体:abstain = 允许写「答案:不确定」")
+    ap.add_argument(
+        "--mode", choices=MODES, default="plain",
+        help="budget-forcing = 撞上 max_tokens 时接回思考流、强写 </think> 与答案触发词再续写 32 token(s1 式)",
+    )
     # 预登记随机抽样卷(协议 v2 的一部分):种子固定 → 每个 run 考完全相同的题,
     # 对照有效;抽样量按 Wilson CI ±2pp 定。格式 "cmexam=2000,medxpertqa=1000"
     ap.add_argument("--samples", default="", help="逐集抽样量,如 cmexam=2000,medxpertqa=1000;未列出的集全量")

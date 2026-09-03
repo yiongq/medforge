@@ -25,6 +25,7 @@ class RunResult:
     abstained: int = 0  # 验证器弃权数:计错进分母,但必须单独可见(见 load_run)
     unfinished: int = 0  # 未收尾数(撞 max_tokens / 没有 </think>):同样计错,但与弃权分列
     missing: int = 0     # 压根没生成(端点失败/空作答):同样计错;是评测故障不是模型行为,再分一列
+    declared: int = 0    # 主动弃权(模型自己写「答案:不确定」),是 abstained 的子集:能力而非故障
 
     @property
     def acc(self) -> float:
@@ -41,6 +42,10 @@ class RunResult:
     @property
     def missing_rate(self) -> float:
         return self.missing / self.n if self.n else 0.0
+
+    @property
+    def declared_rate(self) -> float:
+        return self.declared / self.n if self.n else 0.0
 
     def wilson_ci(self, z: float = 1.96) -> tuple[float, float]:
         if self.n == 0:
@@ -71,7 +76,7 @@ def load_run(path: Path, name: str) -> RunResult:
     其余 null 是「验证器判不了」(弃权)。两个 run 的准确率差可能全部来自这几列的差
     (格式崩坏 / 复读截断 / 端点掉线 vs 真答错),报告里看不见它们,读者就会把前者误读成后者。
     """
-    n = correct = abstained = unfinished = missing = 0
+    n = correct = abstained = unfinished = missing = declared = 0
     for row in load_verdicts(path).values():
         n += 1
         if row.get("correct") is True:
@@ -84,7 +89,8 @@ def load_run(path: Path, name: str) -> RunResult:
                 missing += 1
             else:
                 abstained += 1
-    return RunResult(name, n, correct, abstained, unfinished, missing)
+                declared += row.get("detail") == "declared"
+    return RunResult(name, n, correct, abstained, unfinished, missing, declared)
 
 
 def markdown_table(runs: Iterable[RunResult], baseline: str = "base") -> str:
@@ -97,9 +103,10 @@ def markdown_table(runs: Iterable[RunResult], baseline: str = "base") -> str:
     for r in runs:
         lo, hi = r.wilson_ci()
         delta = f"{(r.acc - base.acc) * 100:+.1f}pp" if base and r is not base else "—"
+        abst = f"{r.abstain_rate * 100:.1f}%" + (f"(主动 {r.declared_rate * 100:.1f}%)" if r.declared else "")
         lines.append(
             f"| {r.name} | {r.n} | {r.acc * 100:.1f}% | [{lo * 100:.1f}, {hi * 100:.1f}] "
-            f"| {r.abstain_rate * 100:.1f}% | {r.unfinished_rate * 100:.1f}% | {r.missing_rate * 100:.1f}% | {delta} |"
+            f"| {abst} | {r.unfinished_rate * 100:.1f}% | {r.missing_rate * 100:.1f}% | {delta} |"
         )
     return "\n".join(lines)
 
