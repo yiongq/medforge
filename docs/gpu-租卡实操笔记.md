@@ -31,6 +31,23 @@ W1 底分评测在两台 4090 上共踩 10+ 坑的完整复盘。每条都真实
 4. **锁文件是版本唯一事实源**:`uv run` 每次隐式 sync 会把包按锁降回去——
    bootstrap 里 pip 层升的版本会被悄悄回滚;要升版本改 `uv lock --upgrade-package`,不要只改安装层
 
+## 2026-09-03 租 5090 D 新踩的坑(P2 解码裁决那次)
+
+- **uv 官方安装器会卡死**:bootstrap 第 2 步 `curl astral.sh/uv/install.sh` 从 GitHub releases 下载 tar,这台机器上
+  一个字节都下不动(12 秒 0 → 0)。改从阿里源装:`/root/miniconda3/bin/python3.12 -m pip install -i https://mirrors.aliyun.com/pypi/simple uv`,
+  再 `ln -sf /root/miniconda3/bin/uv ~/.local/bin/uv`,重跑 bootstrap(幂等,`command -v uv` 会跳过安装)
+- **评测集不进 git,上机要先传**:`data/raw/{cmexam.test,cmb.val,medxpertqa.test}.jsonl` 三份共 11MB,
+  `scp` 上去比在机器上重跑 `medforge.data.download` 快得多(后者还要拉训练集)
+- **系统盘只有 30G**:仓库、`.venv`、`models/` 都放 `/root/autodl-tmp`(数据盘),并 `export UV_CACHE_DIR=/root/autodl-tmp/uv-cache`
+  (uv 缓存 300MB+,默认在系统盘 `~/.cache`)
+- **pkill 自杀的第三种写法**:`pkill -f "eval_p2_arms[.]sh"` 本身安全,但同一条 ssh 命令里若还有一句
+  `bash scripts/eval_p2_arms.sh ...`(比如「先杀再重启」),命令行里就出现了字面量,自己照样被杀(exit 255)。
+  先杀后启动必须拆成两次 ssh,或者只杀 `medforge[.]eval[.]run` 让脚本因 set -e 自行退出
+- **32k 预算的贪心臂要给 `--timeout 3600`**:复读跑满 32768 token 一条请求十来分钟,默认 300 秒超时按生成失败计,超 2% 整臂退出
+- **vLLM 0.28 + Qwen3.5-4B 不需要任何额外参数**:`reasoning_parser=''`,content 里带 `</think>`;`--max-model-len 36864`
+  在 32G 上 0.92 显存占用起得来,concurrency 32 下三卷吞吐约每 15 分钟 400 题(CMExam)
+- 实际账单:5090 D ¥2.78/时,五条臂 + 环境约 9 小时
+
 ## 远程执行
 
 - 模型给 vLLM 前先解析成本地路径(`modelscope.snapshot_download` 幂等):

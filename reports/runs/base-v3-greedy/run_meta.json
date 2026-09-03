@@ -1,0 +1,32 @@
+{
+  "run_name": "base-v3-greedy",
+  "model": "base",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 8192,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "thinking": "on",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "llm_judge": true,
+  "git": "663e3e5",
+  "created": "2026-09-03T17:07:12+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "663e3e5",
+      "created": "2026-09-03T17:07:12+08:00"
+    }
+  ],
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "mode": "plain",
+  "limit": 0,
+  "note": "prompt/prompt_sha/mode/limit 由 PR #5 修复后补写(生成时代码未写入,实际参数即默认值)"
+}
