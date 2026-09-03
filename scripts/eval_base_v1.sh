@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# base 底分评测(ADR 口径 1:任何训练开始前,底分必须先落盘 reports/)
-# 在租卡 GPU 机上执行,前置:bash scripts/autodl_bootstrap.sh 已跑完
-# 用法:bash scripts/eval_base.sh [模型名,默认 Qwen/Qwen3.5-4B]
+# 【存档脚本】协议 v1 的 base 底分评测(max_tokens 2048、贪心、全量卷),reports/runs/base/ 由它产出。
+# v1 会截断思考型模型,已被 v2/v3 取代;保留只为复现存档,不要用它跑新评测——
+# 新评测用 scripts/eval_p2_arms.sh(v3 协议)或直接 uv run python -m medforge.eval.run(默认即 v3)。
+# 用法:bash scripts/eval_base_v1.sh [模型名,默认 Qwen/Qwen3.5-4B]
 set -euo pipefail
 MODEL="${1:-Qwen/Qwen3.5-4B}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
@@ -22,10 +23,10 @@ echo "   vLLM 就绪"
 
 echo "== [2/3] 冒烟:每套考卷先跑 20 题确认链路 =="
 uv run python -m medforge.eval.run --endpoint http://127.0.0.1:8000/v1 \
-  --model target --run-name base-smoke --limit 20
+  --model target --run-name base --adopt-legacy --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0-v1-smoke --limit 20 --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0
 
 echo "== [3/3] 全量三套考卷(约 9540 题)=="
 uv run python -m medforge.eval.run --endpoint http://127.0.0.1:8000/v1 \
-  --model target --run-name base
+  --model target --run-name base --adopt-legacy --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0
 
 echo "✓ 底分落盘 reports/runs/base/summary.md —— commit 后方可开始训练"

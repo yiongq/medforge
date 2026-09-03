@@ -1,0 +1,35 @@
+{
+  "run_name": "base-v3-forcing",
+  "model": "base",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 8192,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "mode": "budget-forcing",
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "7fa92bf",
+  "created": "2026-09-03T19:00:19+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "7fa92bf",
+      "created": "2026-09-03T19:00:19+08:00"
+    },
+    {
+      "git": "27db680",
+      "created": "2026-09-03T19:15:11+08:00"
+    }
+  ]
+}

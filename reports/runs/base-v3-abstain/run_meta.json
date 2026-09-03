@@ -1,0 +1,31 @@
+{
+  "run_name": "base-v3-abstain",
+  "model": "base",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 8192,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "mode": "plain",
+  "prompt": "abstain",
+  "prompt_sha": "ad038943",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "27db680",
+  "created": "2026-09-03T20:59:38+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "27db680",
+      "created": "2026-09-03T20:59:38+08:00"
+    }
+  ]
+}

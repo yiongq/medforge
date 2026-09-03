@@ -42,8 +42,8 @@ from medforge.verify.verifier import split_answer, verify_by_rule
 REP_WINDOW = 4000
 REP_N = 12
 REP_THRESHOLD = 0.5
-# 进多重比较校正族的臂:协议 v2 下训练出来的配方;存档 v1(base)只是协议对照
-NON_ARCHIVE = {"sft-v2", "sft-r1-v2", "dpo-v2"}
+# 不进多重比较校正族的 run:v1 存档(base)只是协议对照,不是「哪个配方/解码更好」的假设
+ARCHIVE_ONLY = {"base"}
 
 
 def tail_repetition(text: str, n: int = REP_N, window: int = REP_WINDOW) -> float:
@@ -224,7 +224,7 @@ def render(
                 comps[(s, run, attr)] = (
                     paired(base_tags, tags, attr), _rate(base_tags, common, attr), _rate(tags, common, attr), len(tags),
                 )
-    family = {attr: [k for k in comps if k[2] == attr and k[1] in NON_ARCHIVE] for attr in ("strict", "wide")}
+    family = {attr: [k for k in comps if k[2] == attr and k[1] not in ARCHIVE_ONLY] for attr in ("strict", "wide")}
     corrected: dict[tuple[str, str, str], tuple[bool, bool]] = {}
     for attr, keys in family.items():
         ps = [comps[k][0].p_value for k in keys]
@@ -232,8 +232,8 @@ def render(
             corrected[k] = (h, b)
     lines += [
         (
-            f"多重比较校正:严格口径与宽口径各自一族({len(family['strict'])} 项:非存档臂 × 三卷),"
-            "Holm 控 FWER、BH 控 FDR,均取 α=0.05;存档 v1 行不进族。"
+            f"多重比较校正:严格口径与宽口径各自一族({len(family['strict'])} 项:非存档 run × 各卷),"
+            "Holm 控 FWER、BH 控 FDR,均取 α=0.05;存档 v1(base)行不进族。"
         ),
         "",
     ]
@@ -259,7 +259,7 @@ def render(
                     p, ra, rb, n_total = comps[(s, run, attr)]
                     h, b = corrected.get((s, run, attr), (None, None))
                     cells.append(_vs(p, ra, rb, n_total, h, b))
-                    if attr == "strict" and run in NON_ARCHIVE:
+                    if attr == "strict" and run not in ARCHIVE_ONLY:
                         mdes.append(p.mde())
                 vs_s, vs_w = cells
             lines.append(

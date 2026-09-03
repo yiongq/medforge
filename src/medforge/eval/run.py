@@ -17,9 +17,9 @@
     summary.md            各集准确率表(Wilson CI + 弃权率 + 未收尾率)+ 协议抬头
 
 协议版本:v1 = max_tokens 2048(截断思考型模型,存档保留);v2 = 8192 + temperature 0 +
-固定种子抽样卷;v3(W2 审查后)= 可配解码参数 + finish_reason 落盘 + 截断守卫
-(--thinking on:没有 </think> 即判未收尾,默认开——存档答卷没有 finish_reason,守卫只剩这条腿)。
-解码参数默认值保持 v2,由命令行显式切 v3。
+固定种子抽样卷;v3(P2 解码裁决后为默认)= Qwen3.5-4B 官方卡思考模式采样参数(1.0 / 0.95 / 20 / min_p 0 /
+presence_penalty 1.5)+ 32768 预算 + finish_reason 落盘 + 截断守卫(--thinking on:没有 </think> 即判未收尾)。
+复现 v2 协议:--temperature 0 --top-p 1 --top-k -1 --presence-penalty 0 --max-tokens 8192。
 """
 
 from __future__ import annotations
@@ -314,15 +314,15 @@ def main() -> None:
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--timeout", type=float, default=300.0, help="单条请求超时秒数;32768 预算的贪心臂要给 3600")
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
-    # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
-    ap.add_argument("--max-tokens", type=int, default=8192)
-    # 解码参数默认保持 v2 贪心口径;v3 由命令行显式切。Qwen3.5-4B 官方卡(2026-09-03 核对)思考模式通用任务:
-    # temperature 1.0 / top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 1.5,并明令禁止贪心(会无尽复读)
-    ap.add_argument("--temperature", type=float, default=0.0)
-    ap.add_argument("--top-p", type=float, default=1.0)
-    ap.add_argument("--top-k", type=int, default=-1, help="-1 = 不限制(vLLM 语义)")
+    # 协议 v1=2048、v2=8192 均为存档协议;v3=32768(官方卡建议,P2 实测三卷无一撞顶,最长 21k)
+    ap.add_argument("--max-tokens", type=int, default=32768)
+    # 解码默认 = Qwen3.5-4B 官方卡(2026-09-03 核对)思考模式通用任务参数;官方明令禁止贪心(会无尽复读),
+    # P2 实测贪心让基座三卷 26~67% 的题转圈交不了卷(reports/p2-decoding-arms.md)
+    ap.add_argument("--temperature", type=float, default=1.0)
+    ap.add_argument("--top-p", type=float, default=0.95)
+    ap.add_argument("--top-k", type=int, default=20, help="-1 = 不限制(vLLM 语义)")
     ap.add_argument("--min-p", type=float, default=0.0)
-    ap.add_argument("--presence-penalty", type=float, default=0.0)
+    ap.add_argument("--presence-penalty", type=float, default=1.5)
     ap.add_argument("--seed", type=int, default=42, help="逐请求下发,采样协议也可复现")
     ap.add_argument(
         "--thinking", choices=sorted(THINKING_MODES), default="on",
