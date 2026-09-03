@@ -31,7 +31,7 @@ from rich import print as rprint
 from medforge.data.schema import Sample
 from medforge.data.sources import ROOT
 from medforge.verify.extract import extract
-from medforge.verify.verifier import verify_by_llm, verify_by_rule
+from medforge.verify.verifier import split_answer, verify_by_llm, verify_by_rule
 
 PROCESSED = ROOT / "data" / "processed"
 SEED = 42
@@ -62,15 +62,21 @@ def classify_solution(sample: Sample, sol: str, llm_arbitrate: bool) -> str:
     交 LLM 仲裁(防「同义答案被误杀成负例」);连答案声明都没有的丢弃——
     没结论的解进 rejected 教的是「别写结论」,是毒信号。
     无仲裁模式下声明不符直接判错:可验证题答案短而规范,误杀率低【暂定,抽检验证】。
+    截断守卫与评测共用(W2 审查后):采样解撞上 max_tokens 没写出 </think> 的一律 drop——
+    规则层会从复读段刮出「最终答案:X」,与 gold 相符就进 chosen,等于拿半截思考流当教学信号。
+    采样落盘时没有记 finish_reason(P7 待补),这里只能靠思考型口径的 </think> 判据。
     """
-    v = verify_by_rule(sample, sol)
+    answer, unfinished = split_answer(sol, thinking=True)
+    if unfinished is not None:
+        return "drop"
+    v = verify_by_rule(sample, answer)
     if v is not None:
         return "correct" if v.correct else "wrong"
-    ext = extract(sol, sample.is_choice)
+    ext = extract(answer, sample.is_choice, options=sample.options)
     if ext is None:
         return "drop"
     if llm_arbitrate:
-        v2 = verify_by_llm(sample, sol)
+        v2 = verify_by_llm(sample, answer)
         if v2.correct is True:
             return "correct"
         if v2.correct is False:

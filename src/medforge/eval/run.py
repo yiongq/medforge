@@ -2,7 +2,7 @@
 
 刻意的薄封装而非 EvalScope 深度集成(决策修正记录在 ADR-001 评测行):
 四套考卷在 EvalScope 里全部要自写适配、判分必须复用已校准的 verifier.py,
-框架只剩「发请求」的价值,却带来插件 API 版本耦合。这 150 行本机可完整
+框架只剩「发请求」的价值,却带来插件 API 版本耦合。这 200 行本机可完整
 测试(tests/ 用假 OpenAI 服务端跑通全链路),EvalScope 保留给压测。
 
 用法(端点通常是租卡上的 vllm serve):
@@ -11,18 +11,29 @@
       --run-name base --sets cmexam,cmb-val,medxpertqa
 
 产出 reports/runs/<run-name>/:
-    <set>.outputs.jsonl   原始作答(断点续跑的依据,重跑只补空缺)
+    run_meta.json         协议指纹(模型/解码参数/抽样/git):同一目录只允许一套协议
+    <set>.outputs.jsonl   原始作答 + finish_reason + completion_tokens(断点续跑的依据)
     <set>.scored.jsonl    判分结果(report.load_run 的输入)
-    summary.md            各集准确率表(Wilson CI + 弃权率)
+    summary.md            各集准确率表(Wilson CI + 弃权率 + 未收尾率)+ 协议抬头
+
+协议版本:v1 = max_tokens 2048(截断思考型模型,存档保留);v2 = 8192 + temperature 0 +
+固定种子抽样卷;v3(W2 审查后)= 可配解码参数 + finish_reason 落盘 + 截断守卫
+(--thinking on:没有 </think> 即判未收尾,默认开——存档答卷没有 finish_reason,守卫只剩这条腿)。
+解码参数默认值保持 v2,由命令行显式切 v3。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import random
+import subprocess
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rich import print as rprint
@@ -39,6 +50,16 @@ PROMPT_CHOICE = (
 )
 PROMPT_OPEN = "你是医学助手,回答下面的问题。先给出推理过程,最后一行以「最终答案:」开头给出结论。\n\n{question}"
 
+# 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径
+PROTOCOL_KEYS = (
+    "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
+    "prompt_sha", "samples", "limit", "thinking", "llm_judge",
+)
+PROMPT_SHA = hashlib.sha256((PROMPT_CHOICE + "\n" + PROMPT_OPEN).encode()).hexdigest()[:8]
+THINKING_MODES = {"on": True, "off": False, "auto": None}
+MAX_FAIL_RATE = 0.02  # 生成失败超过这个比例就不出表:一张 0% 的 summary 与一次成功评测在退出码上不可区分
+JUDGE_ENV = ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
+
 
 def _gen_outputs(
     samples: list[Sample],
@@ -49,18 +70,25 @@ def _gen_outputs(
     model: str,
     concurrency: int,
     max_tokens: int,
-) -> dict[str, str]:
-    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: output}。"""
+    temperature: float = 0.0,
+    top_p: float = 1.0,
+    top_k: int = -1,
+    presence_penalty: float = 0.0,
+    seed: int = 42,
+) -> dict[str, dict]:
+    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens"}}。"""
     from openai import OpenAI
 
-    outputs: dict[str, str] = {}
+    outputs: dict[str, dict] = {}
     if out_file.exists():
         for line in out_file.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
-                outputs[row["id"]] = row["output"]
+                outputs[row["id"]] = row
     todo = [s for s in samples if s.id not in outputs]
-    rprint(f"  待生成 {len(todo)} / {len(samples)}(已有 {len(outputs)} 条复用)")
+    reused = len(samples) - len(todo)
+    stray = len(outputs) - reused
+    rprint(f"  待生成 {len(todo)} / {len(samples)}(已有 {reused} 条复用" + (f",另有 {stray} 条不属于本卷的残留)" if stray else ")"))
     if not todo:
         return outputs
 
@@ -68,32 +96,53 @@ def _gen_outputs(
     lock = threading.Lock()
     f = out_file.open("a", encoding="utf-8")
 
-    def gen_one(s: Sample) -> tuple[str, str]:
+    def gen_one(s: Sample) -> dict:
         prompt = (PROMPT_CHOICE if s.is_choice else PROMPT_OPEN).format(question=s.render_question())
+        # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
+        # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
         resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,  # 评测口径:贪心解码,可复现
+            model=model, messages=[{"role": "user", "content": prompt}],
+            temperature=temperature, top_p=top_p, presence_penalty=presence_penalty,
+            seed=seed,  # 逐请求下发:采样协议也可复现
             max_tokens=max_tokens,
+            extra_body={"top_k": top_k},  # vLLM 私有参数(-1 = 不限),OpenAI SDK 不认所以走 extra_body
         )
-        return s.id, resp.choices[0].message.content or ""
+        ch = resp.choices[0]
+        usage = getattr(resp, "usage", None)
+        return {
+            "id": s.id,
+            "output": ch.message.content or "",
+            "finish_reason": ch.finish_reason,
+            "completion_tokens": getattr(usage, "completion_tokens", None) if usage else None,
+        }
 
-    done = 0
+    done = failed = 0
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = [pool.submit(gen_one, s) for s in todo]
         for fut in as_completed(futures):
             with lock:
                 done += 1
                 try:
-                    sid, text = fut.result()
-                    outputs[sid] = text
-                    f.write(json.dumps({"id": sid, "output": text}, ensure_ascii=False) + "\n")
-                    f.flush()
+                    row = fut.result()
+                    if not row["output"]:
+                        # 空作答不落盘:多半是端点异常;落了盘断点续跑就永远是空的
+                        failed += 1
+                        rprint(f"  ✗ {row['id']} 空作答(finish_reason={row['finish_reason']}),留待重跑")
+                    else:
+                        outputs[row["id"]] = row
+                        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                        f.flush()
                 except Exception as e:  # noqa: BLE001  单条失败不废整卷,重跑补缺
+                    failed += 1
                     rprint(f"  ✗ {type(e).__name__}: {e}")
                 if done % 100 == 0:
                     rprint(f"  [{done}/{len(todo)}]")
     f.close()
+    if failed and failed / len(todo) > MAX_FAIL_RATE:
+        # 已生成的都落盘了,重跑只补缺;但不能带着一堆 missing 出一张看起来正常的表
+        raise SystemExit(f"✗ 生成失败 {failed}/{len(todo)} 超过 {MAX_FAIL_RATE:.0%}:检查端点/参数后重跑补缺")
+    if failed:
+        rprint(f"  [yellow]! {failed} 条生成失败,已按 missing 计错;重跑可补缺[/]")
     return outputs
 
 
@@ -108,28 +157,100 @@ def run_set(
     concurrency: int = 16,
     max_tokens: int = 2048,
     allow_llm_judge: bool = True,
+    thinking: bool | None = None,
+    gen: dict | None = None,
 ) -> Path:
-    """跑一套考卷,返回 scored 文件路径。判分与 DPO 构造共用 verify()——口径唯一。"""
+    """跑一套考卷,返回 scored 文件路径。判分与 DPO 构造共用 verify()——口径唯一。
+
+    thinking=True 时按思考型口径:没有 </think> 即判未收尾;None 为自动(语义见 verifier.split_answer)。
+    gen 是解码参数(temperature/top_p/top_k/presence_penalty/seed),缺省即 v2 贪心。
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     rprint(f"[bold]▶ {name}[/]({len(samples)} 题)")
     outputs = _gen_outputs(
         samples, out_dir / f"{name}.outputs.jsonl",
         base_url=base_url, api_key=api_key, model=model,
-        concurrency=concurrency, max_tokens=max_tokens,
+        concurrency=concurrency, max_tokens=max_tokens, **(gen or {}),
     )
     scored_file = out_dir / f"{name}.scored.jsonl"
     with scored_file.open("w", encoding="utf-8") as f:
         for s in samples:
-            out = outputs.get(s.id)
-            if out is None:
-                v_correct, method = None, "missing"  # 生成失败的题:弃权口径计错,不静默跳过
+            row = outputs.get(s.id)
+            if row is None:
+                v_correct, method, detail = None, "missing", ""  # 生成失败的题:弃权口径计错,不静默跳过
             else:
-                v = verify(s, out, allow_llm=allow_llm_judge)
-                v_correct, method = v.correct, v.method
-            f.write(json.dumps({"id": s.id, "correct": v_correct, "method": method}, ensure_ascii=False) + "\n")
+                v = verify(
+                    s, row["output"], allow_llm=allow_llm_judge,
+                    finish_reason=row.get("finish_reason"), thinking=thinking,
+                )
+                v_correct, method, detail = v.correct, v.method, v.detail
+            f.write(json.dumps({
+                "id": s.id, "correct": v_correct, "method": method,
+                "finish_reason": (row or {}).get("finish_reason"),
+                "completion_tokens": (row or {}).get("completion_tokens"),
+                "detail": detail if method == "unfinished" else "",
+            }, ensure_ascii=False) + "\n")
     r = load_run(scored_file, name)
-    rprint(f"  [green]✓[/] 准确率 {r.acc * 100:.1f}%(n={r.n},弃权 {r.abstained})")
+    rprint(
+        f"  [green]✓[/] 准确率 {r.acc * 100:.1f}%(n={r.n},弃权 {r.abstained},未收尾 {r.unfinished})"
+    )
     return scored_file
+
+
+def git_describe(root: Path) -> str:
+    """短 hash + dirty 标记;不在 git 里就 unknown——报告数字要能追到提交。"""
+    try:
+        h = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=root, text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, text=True, stderr=subprocess.DEVNULL,
+        )
+        return h + ("-dirty" if status.strip() else "")  # 已暂存与未暂存都算脏;未跟踪文件不算
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> None:
+    """同一 run 目录只能有一套协议:断点续跑时若参数变了,新旧答卷混在一起无法解读。
+
+    首次运行写 run_meta.json;之后每次比对 PROTOCOL_KEYS,不一致直接退出。
+    目录里已有 *.outputs.jsonl 却没有 run_meta.json 的是 W2 之前的存档,不知道它们按什么协议生成,
+    默认拒绝——否则一次 v3 续跑会给一批 v2 贪心答卷盖上 v3 指纹,还会以 "w" 模式重写存档 scored。
+    显式 --adopt-legacy 才补写一份标了 legacy 的指纹。每次运行追加一条 history(git/时间),
+    因为续跑常常跨天跨提交,首跑的 git 不能代表整份答卷。
+    """
+    meta_file = out_dir / "run_meta.json"
+    stamp = {"git": meta.get("git"), "created": meta.get("created")}
+    if meta_file.exists():
+        old = json.loads(meta_file.read_text(encoding="utf-8"))
+        diff = {k: (old.get(k), meta.get(k)) for k in PROTOCOL_KEYS if old.get(k) != meta.get(k)}
+        if diff:
+            raise SystemExit(f"✗ {out_dir.name} 已按另一套协议落过盘 {diff};换 --run-name 或删掉目录")
+        old.setdefault("history", []).append(stamp)
+        meta_file.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
+        return
+    if any(out_dir.glob("*.outputs.jsonl")) and not adopt_legacy:
+        raise SystemExit(
+            f"✗ {out_dir.name} 已有存档答卷但没有 run_meta.json(W2 之前的目录):"
+            "不知道它们按什么协议生成,拒绝续跑;确认协议一致再加 --adopt-legacy,或换 --run-name"
+        )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    meta_file.write_text(
+        json.dumps({**meta, "legacy": adopt_legacy, "history": [stamp]}, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+
+
+def protocol_line(meta: dict) -> str:
+    keys = (
+        "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
+        "prompt_sha", "thinking", "llm_judge", "git",
+    )
+    parts = [f"{k}={meta.get(k)}" for k in keys]
+    parts.append("抽样=" + (",".join(f"{k}={v}" for k, v in meta["samples"].items()) if meta.get("samples") else "全量"))
+    if meta.get("limit"):
+        parts.append(f"limit={meta['limit']}(冒烟)")
+    return "协议:" + " · ".join(parts)
 
 
 def main() -> None:
@@ -147,6 +268,17 @@ def main() -> None:
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
     # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
     ap.add_argument("--max-tokens", type=int, default=8192)
+    # 解码参数默认保持 v2 贪心口径;v3 由命令行显式切(Qwen3 thinking 官方推荐 0.6/0.95/20)
+    ap.add_argument("--temperature", type=float, default=0.0)
+    ap.add_argument("--top-p", type=float, default=1.0)
+    ap.add_argument("--top-k", type=int, default=-1, help="-1 = 不限制(vLLM 语义)")
+    ap.add_argument("--presence-penalty", type=float, default=0.0)
+    ap.add_argument("--seed", type=int, default=42, help="逐请求下发,采样协议也可复现")
+    ap.add_argument(
+        "--thinking", choices=sorted(THINKING_MODES), default="on",
+        help="截断守卫口径:on = 没有 </think> 即判未收尾(默认,思考型模型);off = 全文判分;auto = 含 </think> 才按思考型",
+    )
+    ap.add_argument("--adopt-legacy", action="store_true", help="给 W2 之前没有 run_meta.json 的存档目录补写协议指纹")
     # 预登记随机抽样卷(协议 v2 的一部分):种子固定 → 每个 run 考完全相同的题,
     # 对照有效;抽样量按 Wilson CI ±2pp 定。格式 "cmexam=2000,medxpertqa=1000"
     ap.add_argument("--samples", default="", help="逐集抽样量,如 cmexam=2000,medxpertqa=1000;未列出的集全量")
@@ -156,7 +288,26 @@ def main() -> None:
         k, _, v = kv.partition("=")
         sample_map[k.strip()] = int(v)
 
+    # fail-fast:judge 没配时 verify_by_llm 只会静默弃权,弃权计错——整卷分数无声塌一半
+    if not args.no_llm_judge:
+        missing = [k for k in JUDGE_ENV if not os.environ.get(k)]
+        if missing:
+            rprint(f"[red]✗ LLM 兜底已启用但 judge 未配置: {missing};配好 .env 或显式 --no-llm-judge[/]")
+            sys.exit(2)
+
+    gen = {
+        "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k,
+        "presence_penalty": args.presence_penalty, "seed": args.seed,
+    }
+    meta = {
+        "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint,
+        "max_tokens": args.max_tokens, **gen, "thinking": args.thinking,
+        "samples": sample_map, "llm_judge": not args.no_llm_judge,
+        "git": git_describe(ROOT), "created": datetime.now(UTC).astimezone().isoformat(timespec="seconds"),
+    }
     out_dir = ROOT / "reports" / "runs" / args.run_name
+    check_protocol(out_dir, meta)
+
     tables = []
     for name in args.sets.split(","):
         samples = load_source(name.strip())
@@ -169,11 +320,11 @@ def main() -> None:
             name.strip(), samples, out_dir,
             base_url=args.endpoint, model=args.model,
             concurrency=args.concurrency, max_tokens=args.max_tokens,
-            allow_llm_judge=not args.no_llm_judge,
+            allow_llm_judge=not args.no_llm_judge, thinking=THINKING_MODES[args.thinking], gen=gen,
         )
         tables.append((name.strip(), load_run(scored, args.run_name)))
 
-    lines = [f"# {args.run_name} 评测汇总", ""]
+    lines = [f"# {args.run_name} 评测汇总", "", protocol_line(meta), ""]
     for name, r in tables:
         lines += [f"## {name}", "", markdown_table([r], baseline="__none__"), ""]
     (out_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")

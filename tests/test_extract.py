@@ -73,6 +73,43 @@ class TestChoice:
     def test_review_boxed_text_wrapper(self):
         assert extract_choice(r"所以 \boxed{\text{C}}").value == "C"
 
+    # ---- [review W2] 连写多选与跨行分隔 ----
+
+    def test_review_consecutive_multi_select(self):
+        # 评测提示词自己要求的格式,曾抽不出白烧 LLM 兜底
+        assert extract_choice("综合以上,答案:ABD").value == "ABD"
+        assert extract_choice("答案:ABD。").value == "ABD"
+
+    def test_review_consecutive_rejects_abbreviations(self):
+        # DIC / ECG / CEA 不升序,不是答案
+        assert extract_choice("答案:DIC") is None
+        assert extract_choice("最终答案:ECG") is None
+
+    def test_review_consecutive_must_end_line(self):
+        assert extract_choice("答案:ACEI 类药物") is None
+
+    def test_review_consecutive_validated_against_options(self):
+        assert extract_choice("答案:ABD", options={"A": "", "B": "", "C": ""}) is None
+        assert extract_choice("答案:AB", options={"A": "", "B": "", "C": ""}).value == "AB"
+
+    def test_review_consecutive_rejects_prompt_example_echo(self):
+        # 思考型模型会原样复述提示词里的格式示例;「如「答案:ABD」」不是作答
+        assert extract_choice("(多选题写出全部字母,如「答案:ABD」)") is None
+        assert extract_choice("Final check on format: 「答案:BD」") is None
+        assert extract_choice("If it is multiple choice, I write 答案:AD") is None
+
+    def test_review_consecutive_must_be_last_line(self):
+        # 提示词要求「最后一行」给答案;连写声明后面还有正文的,弃权交 LLM
+        assert extract_choice("答案:ABD\n解析:A 项…") is None
+        assert extract_choice("综上。\n答案:ABD\n") .value == "ABD"
+
+    def test_review_newline_breaks_continuation(self):
+        # 曾把下一段开头的「C 选项」并进多选,抽成 BC
+        assert extract_choice("最终答案:B\n\nC 选项是干扰项。").value == "B"
+
+    def test_space_separated_multi_still_works(self):
+        assert extract_choice("答案:A C D").value == "ACD"
+
 
 class TestText:
     def test_boxed_text(self):

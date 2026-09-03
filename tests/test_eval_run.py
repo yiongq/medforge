@@ -16,11 +16,12 @@ from medforge.data.schema import Sample
 from medforge.eval.report import load_run
 from medforge.eval.run import run_set
 
-# 服务端剧本:q1 答对 / q2 答错 / q3 无答案声明(→弃权计错)
+# 服务端剧本:q1 答对 / q2 答错 / q3 无答案声明(→弃权计错)/ q4 撞上限(finish_reason=length → 未收尾)
 SCRIPT = {
-    "q1": "分析各选项后可以确定。答案:B",
-    "q2": "综合判断。答案:A",
-    "q3": "这道题比较复杂,各选项都有道理。",
+    "q1": ("分析各选项后可以确定。答案:B", "stop"),
+    "q2": ("综合判断。答案:A", "stop"),
+    "q3": ("这道题比较复杂,各选项都有道理。", "stop"),
+    "q4": ("候选是 B…等等再想想…答案:B 等等再想想…答案:B", "length"),
 }
 
 
@@ -28,8 +29,11 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         prompt = body["messages"][0]["content"]
-        answer = next((v for k, v in SCRIPT.items() if f"题号{k}" in prompt), "答案:E")
-        resp = {"choices": [{"message": {"role": "assistant", "content": answer}}]}
+        answer, reason = next((v for k, v in SCRIPT.items() if f"题号{k}" in prompt), ("答案:E", "stop"))
+        resp = {
+            "choices": [{"message": {"role": "assistant", "content": answer}, "finish_reason": reason}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": len(answer)},
+        }
         data = json.dumps(resp).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -58,18 +62,22 @@ def _sample(qid: str, gold: str) -> Sample:
 
 
 def test_run_set_end_to_end(mock_server, tmp_path):
-    samples = [_sample("q1", "B"), _sample("q2", "B"), _sample("q3", "B")]
+    samples = [_sample("q1", "B"), _sample("q2", "B"), _sample("q3", "B"), _sample("q4", "B")]
     scored = run_set(
         "synthetic", samples, tmp_path,
         base_url=mock_server, model="mock", concurrency=2,
         allow_llm_judge=False,  # 测试不触真网:规则层弃权就落 null
     )
     r = load_run(scored, "test")
-    assert (r.n, r.correct, r.abstained) == (3, 1, 1)  # q1 对 / q2 错 / q3 弃权计错
+    # q1 对 / q2 错 / q3 弃权计错 / q4 撞上限:末段能刮出「答案:B」也不给分,且与弃权分列
+    assert (r.n, r.correct, r.abstained, r.unfinished) == (4, 1, 1, 1)
 
-    # 断点续跑:outputs 已存在时不再触网(服务端关掉也能重判)
     rows = {json.loads(line)["id"]: json.loads(line) for line in scored.read_text().splitlines()}
     assert rows["q1"]["correct"] is True and rows["q3"]["correct"] is None
+    assert rows["q4"]["method"] == "unfinished" and rows["q4"]["finish_reason"] == "length"
+    # outputs.jsonl 落了 finish_reason 与 completion_tokens,第三方不必再猜「未收尾率」
+    out = {json.loads(line)["id"]: json.loads(line) for line in (tmp_path / "synthetic.outputs.jsonl").read_text().splitlines()}
+    assert out["q4"]["finish_reason"] == "length" and out["q1"]["completion_tokens"] > 0
 
 
 def test_resume_skips_generated(mock_server, tmp_path):
@@ -81,3 +89,39 @@ def test_resume_skips_generated(mock_server, tmp_path):
     scored = run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False)
     row = json.loads(scored.read_text().splitlines()[0])
     assert row["correct"] is False  # 复用了篡改后的 C(≠gold B),证明没有重新生成
+
+def test_protocol_fingerprint_rejects_mixed_decoding(tmp_path):
+    from medforge.eval.run import check_protocol
+
+    meta = {"model": "m", "max_tokens": 8192, "temperature": 0.0, "top_p": 1.0, "top_k": -1,
+            "presence_penalty": 0.0, "seed": 42, "prompt_sha": "abcd1234", "samples": {"cmexam": 2000},
+            "limit": 0, "thinking": "on", "llm_judge": True, "git": "aaa", "created": "t1"}
+    check_protocol(tmp_path, meta)  # 首次:写 run_meta.json
+    check_protocol(tmp_path, {**meta, "git": "bbb", "created": "t2"})  # 同协议、换了提交:放行并追加 history
+    saved = json.loads((tmp_path / "run_meta.json").read_text())
+    assert [h["git"] for h in saved["history"]] == ["aaa", "bbb"] and saved["legacy"] is False
+    for bad in ({"temperature": 0.6}, {"samples": {"cmexam": 500}}, {"thinking": "off"}, {"prompt_sha": "ffff0000"}):
+        with pytest.raises(SystemExit):
+            check_protocol(tmp_path, {**meta, **bad})  # 换了协议还往同一目录写:拒绝
+
+
+def test_protocol_refuses_legacy_archive_without_meta(tmp_path):
+    # W2 之前的存档目录:有答卷、没指纹——默认拒绝,--adopt-legacy 才补写并标记 legacy
+    from medforge.eval.run import check_protocol
+
+    (tmp_path / "cmexam.outputs.jsonl").write_text('{"id": "q1", "output": "答案:B"}\n', encoding="utf-8")
+    meta = {"model": "m", "git": "aaa", "created": "t1"}
+    with pytest.raises(SystemExit):
+        check_protocol(tmp_path, meta)
+    check_protocol(tmp_path, meta, adopt_legacy=True)
+    assert json.loads((tmp_path / "run_meta.json").read_text())["legacy"] is True
+
+
+def test_thinking_mode_changes_archive_scoring(mock_server, tmp_path):
+    # 旧格式答卷(无 finish_reason)+ 未收尾复读流:thinking=True 判未收尾,auto 会放过(见 verifier)
+    samples = [_sample("q1", "B")]
+    loop = "候选是 B…等等再想想…答案:B 等等再想想…答案:B"
+    (tmp_path / "s.outputs.jsonl").write_text(json.dumps({"id": "q1", "output": loop}, ensure_ascii=False) + "\n", "utf-8")
+    r_on = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False, thinking=True), "on")
+    r_auto = load_run(run_set("s", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False), "auto")
+    assert (r_on.correct, r_on.unfinished) == (0, 1) and (r_auto.correct, r_auto.unfinished) == (1, 0)

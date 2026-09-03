@@ -37,11 +37,12 @@ class TestMakePairs:
         return Sample(id="q1", source="med-o1-verifiable", question="题", gold="阿司匹林")
 
     def test_pairs_from_mixed_solutions(self):
+        # 采样解来自思考型模型:作答段在 </think> 之后(截断守卫与评测共用,见 classify_solution)
         sols = [
-            "推理……最终答案:阿司匹林",           # 对
-            "更长的推理……所以最终答案:阿司匹林",   # 对(更长)
-            "推理……最终答案:氯吡格雷",           # 错
-            "没有明确结论的解。",                  # 弃权 → 丢弃
+            "推理……</think>最终答案:阿司匹林",           # 对
+            "更长的推理……</think>所以最终答案:阿司匹林",   # 对(更长)
+            "推理……</think>最终答案:氯吡格雷",           # 错
+            "</think>没有明确结论的解。",                  # 弃权 → 丢弃
         ]
         pairs = make_pairs(self.sample(), sols)
         assert len(pairs) == 2
@@ -49,21 +50,29 @@ class TestMakePairs:
             assert "阿司匹林" in p["messages"][1]["content"]      # chosen 必须是对解
             assert "氯吡格雷" in p["rejected_response"]           # rejected 必须是错解
         # 对解按长度升序:第一对的 chosen 是最短对解
-        assert pairs[0]["messages"][1]["content"] == "推理……最终答案:阿司匹林"
+        assert pairs[0]["messages"][1]["content"] == "推理……</think>最终答案:阿司匹林"
 
     def test_no_pair_when_all_correct(self):
-        assert make_pairs(self.sample(), ["最终答案:阿司匹林"] * 3) == []
+        assert make_pairs(self.sample(), ["</think>最终答案:阿司匹林"] * 3) == []
 
     def test_no_pair_when_all_wrong(self):
-        assert make_pairs(self.sample(), ["最终答案:布洛芬"] * 3) == []
+        assert make_pairs(self.sample(), ["</think>最终答案:布洛芬"] * 3) == []
+
+    def test_review_truncated_solution_dropped(self):
+        # [review W2] 撞上 max_tokens 没写出 </think> 的解:末段刮得出「最终答案」也不得进 chosen/rejected——
+        # 拿半截思考流当教学信号正是 DPO 学到「写更长」的一个来源
+        truncated = "候选是阿司匹林……最终答案:阿司匹林 等等再想想……最终答案:阿司匹林 等等"
+        pairs = make_pairs(self.sample(), [truncated, "</think>最终答案:阿司匹林", "</think>最终答案:氯吡格雷"])
+        assert len(pairs) == 1 and pairs[0]["messages"][1]["content"] == "</think>最终答案:阿司匹林"
+        assert make_pairs(self.sample(), [truncated, "候选是氯吡格雷……最终答案:氯吡格雷 等等"]) == []
 
     def test_distinct_rejected_when_available(self):
         # [review] rng.choice 放回抽样曾让两对共享同一条 rejected,损失负例多样性
         sols = [
-            "最终答案:阿司匹林",
-            "长一点的推理……最终答案:阿司匹林",
-            "最终答案:氯吡格雷",
-            "最终答案:替格瑞洛",
+            "</think>最终答案:阿司匹林",
+            "长一点的推理……</think>最终答案:阿司匹林",
+            "</think>最终答案:氯吡格雷",
+            "</think>最终答案:替格瑞洛",
         ]
         pairs = make_pairs(self.sample(), sols)
         assert len(pairs) == 2
@@ -75,7 +84,7 @@ class TestMakePairs:
             "from medforge.data.build_dpo import make_pairs\n"
             "from medforge.data.schema import Sample\n"
             "s = Sample(id='q1', source='t', question='题', gold='阿司匹林')\n"
-            "sols = ['最终答案:阿司匹林', '最终答案:氯吡格雷', '最终答案:替格瑞洛']\n"
+            "sols = ['</think>最终答案:阿司匹林', '</think>最终答案:氯吡格雷', '</think>最终答案:替格瑞洛']\n"
             "print(make_pairs(s, sols)[0]['rejected_response'])\n"
         )
         outs = set()

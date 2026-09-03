@@ -5,7 +5,7 @@
 """
 
 from medforge.data.schema import Sample
-from medforge.verify.verifier import verify_by_rule
+from medforge.verify.verifier import split_answer, verify, verify_by_rule
 
 
 def choice(gold: str) -> Sample:
@@ -59,3 +59,41 @@ class TestOpenRule:
 
     def test_review_exclusion_abstains(self):
         assert verify_by_rule(open_q("急性心肌梗死"), "答案:可排除急性心肌梗死,考虑主动脉夹层") is None
+
+
+class TestTruncationGuard:
+    """[review] 截断守卫:没写完的答卷不得进规则层——规则层会从复读循环末尾刮出「答案:X」。"""
+
+    def test_length_finish_reason_is_unfinished_even_if_scrapeable(self):
+        v = verify(choice("C"), "推理…候选 C…答案:C 等等…答案:C", allow_llm=False, finish_reason="length")
+        assert v.correct is None and v.method == "unfinished"
+
+    def test_thinking_mode_requires_close_tag(self):
+        v = verify(choice("C"), "推理…答案:C", allow_llm=False, thinking=True)
+        assert v.method == "unfinished"
+
+    def test_rule_layer_only_sees_answer_segment(self):
+        # 思考段里的「答案:B」是草稿,作答段的 C 才算
+        v = verify(choice("C"), "先猜 答案:B,再核对…</think>答案:C", allow_llm=False)
+        assert v.correct is True and v.method == "rule"
+
+    def test_answer_only_in_thinking_abstains(self):
+        v = verify(choice("C"), "答案:C 但我不确定</think>各选项都有道理。", allow_llm=False)
+        assert v.correct is None and v.method == "abstain"
+
+    def test_non_thinking_output_unchanged(self):
+        assert verify(choice("C"), "综合分析,答案是 C。", allow_llm=False).correct is True
+
+    def test_split_answer(self):
+        assert split_answer("a</think>b") == ("b", None)
+        assert split_answer("ab")[1] is None  # auto 模式放行非思考型输出——评测思考型模型必须显式 thinking=True
+        assert split_answer("ab", thinking=True)[1] == "no-think-close"
+        assert split_answer("a</think>b</think>c") == ("c", None)  # 多个 </think>:取最后一个
+        assert split_answer("a</think>b", finish_reason="length") == ("b", "finish_reason=length")
+
+    def test_review_archive_without_finish_reason_needs_thinking_on(self):
+        # 存档答卷没有 finish_reason;auto 模式下未写出 </think> 的复读流会被当非思考型全文判分——
+        # 这正是 W2 从复读段刮分的路径,所以评测 CLI 默认 thinking=on
+        loop = "候选是 C…等等再想想…答案:C 等等再想想…答案:C"
+        assert verify(choice("C"), loop, allow_llm=False).correct is True          # auto:放过
+        assert verify(choice("C"), loop, allow_llm=False, thinking=True).method == "unfinished"
