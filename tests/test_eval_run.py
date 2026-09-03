@@ -34,7 +34,8 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path.endswith("/completions") and "messages" not in body:
             # budget forcing 的续写请求:裸 prompt 以「答案:」结尾,续写一个字母
             _Handler.seen_prompts.append(body["prompt"])
-            resp = {"choices": [{"text": " B", "finish_reason": "stop"}], "usage": {"completion_tokens": 1}}
+            # 续写常常写完字母还接着解释,32 token 上限一到 finish_reason 就是 length——这不等于未收尾
+            resp = {"choices": [{"text": " B\n\n**推理过程**:1. 分析", "finish_reason": "length"}], "usage": {"completion_tokens": 32}}
         else:
             prompt = body["messages"][0]["content"]
             _Handler.seen_prompts.append(prompt)
@@ -145,9 +146,15 @@ def test_budget_forcing_rescues_truncated_answer(mock_server, tmp_path):
     scored = run_set("f", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False,
                      thinking=True, gen={"mode": "budget-forcing"})
     row = json.loads(scored.read_text().splitlines()[0])
-    assert row["correct"] is True and row["forced"] is True and row["finish_reason"] == "stop"
+    assert row["correct"] is True and row["forced"] is True and row["finish_reason"] == "forced-length"
     out = json.loads((tmp_path / "f.outputs.jsonl").read_text().splitlines()[0])
-    assert out["output"].endswith("</think>\n\n答案: B") and out["forced"] is True
+    assert "</think>\n\n答案: B" in out["output"] and out["forced"] is True
+    # 修复前落盘的 forced 行(finish_reason 还是裸 length)重判时同样不得判未收尾
+    out["finish_reason"] = "length"
+    (tmp_path / "f.outputs.jsonl").write_text(json.dumps(out, ensure_ascii=False) + "\n", "utf-8")
+    scored = run_set("f", samples, tmp_path, base_url=mock_server, model="mock", allow_llm_judge=False,
+                     thinking=True, gen={"mode": "budget-forcing"})
+    assert json.loads(scored.read_text().splitlines()[0])["correct"] is True
     raw = [p for p in _Handler.seen_prompts if p.startswith("<|im_start|>user")]
     assert len(raw) == 1 and raw[0].startswith(FORCE_PREFIX.split("{prompt}")[0]) and raw[0].endswith("\n</think>\n\n答案:")
 
