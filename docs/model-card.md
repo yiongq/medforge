@@ -71,7 +71,7 @@ vLLM 部署:`vllm serve fang04/medforge-qwen3.5-4b-dpo`
 
 ## 局限
 
-- 评测为固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量),非全量榜单口径
+- 评测为固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量 280),非全量榜单口径;CMB-val 是 CMB 官方的 dev/few-shot 池,不是榜单卷 CMB-test,与 leaderboard 不可比
 - 单随机种子、单次训练,未做多种子重复
 - 判分的「人工校准」实为强模型代理标注 + 人工抽检,非纯人工
 - 中英混合训练数据,中文考卷为主要目标

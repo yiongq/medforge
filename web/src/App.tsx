@@ -206,7 +206,7 @@ export default function App() {
                   <span>{q.bucketLabel}</span>
                   {q.meta?.exam_subject && <span>{q.meta.exam_subject}</span>}
                   {q.meta?.medical_task && <span>{q.meta.medical_task}</span>}
-                  <span className="gold-badge">标准答案 {q.gold}</span>
+                  {q.gold && <span className="gold-badge">标准答案 {q.gold}</span>}
                 </div>
                 <div className="qtext">{q.question}</div>
                 {q.options && (

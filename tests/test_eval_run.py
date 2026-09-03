@@ -102,7 +102,7 @@ def test_resume_skips_generated(mock_server, tmp_path):
 def test_protocol_fingerprint_rejects_mixed_decoding(tmp_path):
     from medforge.eval.run import check_protocol
 
-    meta = {"model": "m", "max_tokens": 8192, "temperature": 0.0, "top_p": 1.0, "top_k": -1,
+    meta = {"model": "m", "max_tokens": 8192, "temperature": 0.0, "top_p": 1.0, "top_k": -1, "min_p": 0.0,
             "presence_penalty": 0.0, "seed": 42, "prompt_sha": "abcd1234", "samples": {"cmexam": 2000},
             "limit": 0, "thinking": "on", "llm_judge": True, "git": "aaa", "created": "t1"}
     check_protocol(tmp_path, meta)  # 首次:写 run_meta.json

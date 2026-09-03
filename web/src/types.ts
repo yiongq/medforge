@@ -13,6 +13,7 @@ export interface Answer {
   thinkingTruncated: boolean
   /** 结论段:永远完整保留(超长时中段省略,头尾都在) */
   conclusion: string
+  redacted?: boolean
   /** 原始总字数,如实上报——长度差异本身是实验现象 */
   chars: number
   /** true=判对 false=判错 null=验证器弃权(计错,但单独可见) */
@@ -28,6 +29,7 @@ export interface Question {
   question: string
   options: Record<string, string> | null
   gold: string
+  redacted?: boolean
   meta: Record<string, string>
   answers: Record<RunKey, Answer>
 }

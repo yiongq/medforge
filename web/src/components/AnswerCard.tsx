@@ -41,7 +41,11 @@ export function AnswerCard({
         </div>
       </div>
       <div className="card-body">
-        <div className="conclusion">{answer.conclusion || '（模型未给出结论段——思考未收尾即到达长度上限）'}</div>
+        <div className="conclusion">
+          {answer.redacted
+            ? '（按 MedXpertQA 许可不公开作答原文,只展示判分与字数）'
+            : answer.conclusion || '（模型未给出结论段——思考未收尾即到达长度上限）'}
+        </div>
         {hasThinking && (
           <>
             <button className="thinking-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
