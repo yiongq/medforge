@@ -11,6 +11,9 @@
 - 思考与结论在导出侧就切开:结论必须完整保留(它才是「答了什么」),
   只有超长的思考段才截断——从头部一刀切会把结尾的结论砍掉(实测基座 17.7k 字答卷踩过)
 - 「思考长度的差异」本身是负结果的可视化证据,所以原始字数一律如实上报
+- MedXpertQA 的题面、选项、标准答案与作答原文一律不导出(REDACTED_SETS):其论文附录 A 的
+  Leakage Prevention Statement 要求不要以任何形式在线分享样例;模型思考流常整段复述题目,所以连作答文本
+  也只留字数与判分。前台对这些题只展示「谁答对了」的格局。
 """
 
 from __future__ import annotations
@@ -26,6 +29,9 @@ from medforge.data.sources import EVAL_SOURCES, ROOT, load_source
 from medforge.eval.report import load_run
 
 THINK_END = "</think>"
+# 许可不允许公开样例的评测集:只导出 id / 判分 / 字数,不导出任何文本
+REDACTED_SETS = {"medxpertqa"}
+REDACTED_NOTE = "按 MedXpertQA 许可不公开题面与作答原文(论文附录 A:请勿以任何形式在线分享样例)"
 
 
 def split_thinking(text: str) -> tuple[str, str]:
@@ -145,29 +151,33 @@ def main() -> None:
                     if not a:
                         continue
                     thinking, conclusion = split_thinking(a["text"])
+                    redacted = eval_set in REDACTED_SETS
                     # 结论若本身超长(模型没写 </think> 时整段都算结论),保留头尾各一半,
                     # 中段省略——宁可断在中间,也不能丢掉结尾的答案声明
                     if len(conclusion) > args.max_chars:
                         half = args.max_chars // 2
                         conclusion = f"{conclusion[:half]}\n\n……（中段省略）……\n\n{conclusion[-half:]}"
                     answers[run] = {
-                        "thinking": thinking[: args.max_chars],
+                        "thinking": "" if redacted else thinking[: args.max_chars],
                         "thinkingChars": len(thinking),
-                        "thinkingTruncated": len(thinking) > args.max_chars,
-                        "conclusion": conclusion,
+                        "thinkingTruncated": (not redacted) and len(thinking) > args.max_chars,
+                        "conclusion": "" if redacted else conclusion,
                         "chars": len(a["text"]),
                         "correct": a["correct"],
                         "method": a["method"],
+                        "redacted": redacted,
                     }
+                redacted = eval_set in REDACTED_SETS
                 questions.append({
                     "id": sid,
                     "set": eval_set,
                     "bucket": bucket,
                     "bucketLabel": BUCKET_LABELS[bucket],
-                    "question": s.question,
-                    "options": s.options,
-                    "gold": s.gold,
-                    "meta": s.meta,
+                    "question": REDACTED_NOTE if redacted else s.question,
+                    "options": None if redacted else s.options,
+                    "gold": "" if redacted else s.gold,
+                    "meta": {} if redacted else s.meta,
+                    "redacted": redacted,
                     "answers": answers,
                 })
 

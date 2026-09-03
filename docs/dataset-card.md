@@ -36,7 +36,7 @@ tags:
 
 ## 评测协议(v2)
 
-temperature 0 · max_tokens 8192 · 固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量)。
+temperature 0 · max_tokens 8192 · 固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量 280;CMB-val 是官方 dev 池,非榜单卷)。
 判分 = 规则层抽取答案声明 + LLM 仲裁兜底;验证器经 200 题人工校准(一致率 96.5%);
 弃权计错但单独统计。完整报告见 [GitHub 仓库](https://github.com/yiongq/medforge)。
 

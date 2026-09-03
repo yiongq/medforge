@@ -1,0 +1,33 @@
+{
+  "run_name": "sft-v2",
+  "endpoint": "vllm serve(AutoDL 租卡,地址未留存)",
+  "model": "Qwen3.5-4B + LoRA SFT(med-o1-sft-zh,2024 GPT-4o 蒸馏)merged",
+  "max_tokens": 8192,
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "git": "0ff8a3d",
+  "created": "2026-08-14",
+  "protocol": "v2",
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "temperature": 0.0,
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "mode": "plain",
+  "limit": 0,
+  "thinking": "off",
+  "llm_judge": true,
+  "legacy": true,
+  "note": "W2 之前的存档,run_meta 为事后按当时的命令与 summary 注记补写;判分用的是没有截断守卫的旧验证器(thinking=off),严格口径重算见 usability.jsonl;评测栈版本未留存(bootstrap 的 env-freeze 未入库),属已知复现缺口",
+  "history": [
+    {
+      "git": "0ff8a3d",
+      "created": "2026-08-14"
+    }
+  ]
+}

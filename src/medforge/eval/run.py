@@ -72,7 +72,7 @@ MODES = ("plain", "budget-forcing")
 
 # 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径
 PROTOCOL_KEYS = (
-    "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
+    "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
     "prompt", "prompt_sha", "mode", "samples", "limit", "thinking", "llm_judge",
 )
 
@@ -96,6 +96,7 @@ def _gen_outputs(
     temperature: float = 0.0,
     top_p: float = 1.0,
     top_k: int = -1,
+    min_p: float = 0.0,
     presence_penalty: float = 0.0,
     seed: int = 42,
     prompt_variant: str = "default",
@@ -125,7 +126,7 @@ def _gen_outputs(
     # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
     # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
     sampling = {"temperature": temperature, "top_p": top_p, "presence_penalty": presence_penalty, "seed": seed}
-    extra = {"top_k": top_k}  # vLLM 私有参数(-1 = 不限),OpenAI SDK 不认所以走 extra_body
+    extra = {"top_k": top_k, "min_p": min_p}  # vLLM 私有参数(top_k -1 = 不限),OpenAI SDK 不认所以走 extra_body
 
     def gen_one(s: Sample) -> dict:
         prompt = (p_choice if s.is_choice else p_open).format(question=s.render_question())
@@ -283,7 +284,7 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
 
 def protocol_line(meta: dict) -> str:
     keys = (
-        "model", "max_tokens", "temperature", "top_p", "top_k", "presence_penalty", "seed",
+        "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
         "prompt", "prompt_sha", "mode", "thinking", "llm_judge", "git",
     )
     parts = [f"{k}={meta.get(k)}" for k in keys]
@@ -308,10 +309,12 @@ def main() -> None:
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
     # 协议 v1=2048(截断思考型模型,存档保留);v2=8192,W2 起基线与训练后统一用 v2
     ap.add_argument("--max-tokens", type=int, default=8192)
-    # 解码参数默认保持 v2 贪心口径;v3 由命令行显式切(Qwen3 thinking 官方推荐 0.6/0.95/20)
+    # 解码参数默认保持 v2 贪心口径;v3 由命令行显式切。Qwen3.5-4B 官方卡(2026-09-03 核对)思考模式通用任务:
+    # temperature 1.0 / top_p 0.95 / top_k 20 / min_p 0 / presence_penalty 1.5,并明令禁止贪心(会无尽复读)
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--top-p", type=float, default=1.0)
     ap.add_argument("--top-k", type=int, default=-1, help="-1 = 不限制(vLLM 语义)")
+    ap.add_argument("--min-p", type=float, default=0.0)
     ap.add_argument("--presence-penalty", type=float, default=0.0)
     ap.add_argument("--seed", type=int, default=42, help="逐请求下发,采样协议也可复现")
     ap.add_argument(
@@ -341,7 +344,7 @@ def main() -> None:
             sys.exit(2)
 
     gen = {
-        "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k,
+        "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": args.min_p,
         "presence_penalty": args.presence_penalty, "seed": args.seed,
     }
     meta = {
