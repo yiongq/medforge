@@ -48,7 +48,7 @@ pipeline_tag: text-generation
 - 基座:`Qwen/Qwen3.5-4B`,LoRA 全层挂载(r=64, α=128, lr=5e-6, 1 epoch)
 - 偏好数据:约 1,000 对,源自 3,000 道可验证医学题(`FreedomIntelligence/medical-o1-verifiable-problem`)
   的自采样(temperature 1.0, k=6, max_tokens 8192)
-- 判分:规则层抽取答案声明 + LLM 仲裁兜底;验证器上岗前经 200 题人工校准,一致率 96.5%
+- 判分:规则层抽取答案声明 + LLM 仲裁兜底;验证器上岗前经 200 题人工校准,一致率 96.5%;LLM 层按选择题工作分布补校准 98.6%(150 题代理标注,2026-09)
 - 去污染:训练题池对全部评测集做字符 10-gram 查重,污染样本剔除,方法与数字公开
 - 框架:ms-swift · 单卡 A800-80G
 
