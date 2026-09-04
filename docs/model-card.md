@@ -21,6 +21,12 @@ pipeline_tag: text-generation
 
 > ⚠️ 研究与工程实践产物,**不构成任何医疗建议**;依据中国相关规定,AI 不得用于自动诊断与处方。
 
+> **2026-09-05 订正**:下表是 8 月的 v2 协议数字(贪心解码、8192 预算、判卷从复读段刮分),审查证明它量的是解码方式不是模型。
+> 在修好的协议 v3 下重评,本模型三卷与基座持平(74.7 / 58.9 / 26.1 vs 74.0 / 60.0 / 25.1),「413 题翻转」的证据作废
+> (同权重两次贪心之间就有 20% 翻转);「蒸馏 SFT 会降智」的结论也已被二代模型推翻——合格老师 + 领域内题 + 修好的配置,
+> 蒸馏 SFT 在 CMExam 上 +6.5pp。见 [reports/p2-decoding-arms.md](https://github.com/yiongq/medforge/blob/main/reports/p2-decoding-arms.md)
+> 与 [模型卡 · 二代](https://github.com/yiongq/medforge/blob/main/docs/model-card-distill.md)。以下原文保留为历史记录。
+
 ## 为什么是这条路线(实验结论)
 
 同一基座、同一套考卷、同一评测协议下,我们对比了三种后训练配方:
