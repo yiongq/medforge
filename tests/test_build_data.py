@@ -6,9 +6,11 @@ import sys
 
 import pytest
 
+from medforge.data.build import _resolve_outputs
 from medforge.data.build_dpo import make_pairs
 from medforge.data.build_sft import mix
 from medforge.data.schema import Sample
+from medforge.data.sources import DEFAULT_TRAIN_SOURCES, TRAIN_SOURCES
 
 
 def _msg(i: int, tag: str) -> dict:
@@ -101,3 +103,44 @@ class TestMakePairs:
         # 弃权解不得进 rejected——判不准的解配进偏好对就是毒数据
         sols = ["最终答案:阿司匹林", "含糊其辞没有结论的长篇推理。"]
         assert make_pairs(self.sample(), sols) == []
+
+
+class TestBuildOutputRouting:
+    """W1 已公开的 train_pool.jsonl / decontamination.md 不许被别的训练源静默改写。"""
+
+    def test_default_paths_unchanged(self):
+        pool, report = _resolve_outputs("")
+        assert pool.name == "train_pool.jsonl"
+        assert report.name == "decontamination.md"
+
+    def test_suffix_writes_beside_not_over(self):
+        pool, report = _resolve_outputs("cmexam-train")
+        assert pool.name == "train_pool-cmexam-train.jsonl"
+        assert report.name == "decontamination-cmexam-train.md"
+        # 关键断言:另存,不是覆盖
+        default_pool, default_report = _resolve_outputs("")
+        assert pool != default_pool and report != default_report
+        assert pool.parent == default_pool.parent and report.parent == default_report.parent
+
+    def test_cmexam_train_registered_but_not_in_default_run(self):
+        # 注册进 TRAIN_SOURCES 是为了能被 --source 选中;
+        # 留在 DEFAULT_TRAIN_SOURCES 之外是为了默认 build 的产物与数字不变
+        assert "cmexam-train" in TRAIN_SOURCES
+        assert "cmexam-train" not in DEFAULT_TRAIN_SOURCES
+        assert DEFAULT_TRAIN_SOURCES == ("med-o1-verifiable", "med-o1-sft-zh", "med-r1-zh")
+
+    def _run(self, *args):
+        return subprocess.run(
+            [sys.executable, "-m", "medforge.data.build", *args],
+            capture_output=True, text=True, check=False,
+        )
+
+    def test_source_without_suffix_is_refused(self):
+        # 覆盖闸门在 argparse 之后、加载数据之前生效,所以这条用例不碰 data/raw
+        r = self._run("--source", "cmexam-train")
+        assert r.returncode == 2
+        assert "--out-suffix" in (r.stdout + r.stderr)
+
+    def test_unknown_source_is_refused(self):
+        r = self._run("--source", "no-such-source", "--out-suffix", "x")
+        assert r.returncode == 2
