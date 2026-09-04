@@ -38,19 +38,25 @@ PY
 "$HOME/.local/bin/uv" pip freeze --python "$HOME/swift-env/bin/python" > "reports/train-env-freeze-$(date +%Y%m%d).txt" 2>/dev/null || true
 
 # 1) 训练(前台,日志落盘;开训 3 分钟内看 filtered/truncated 计数——这是 W2 从没兑现的验收)
-echo "== [1/3] swift sft $CFG $(date +%T) =="
-"$SWIFT" sft "$CFG" 2>&1 | tee "logs/train-$PREFIX.log" | grep -iE "filter|truncat|delete|liger|train_loss|eval_loss|Error|Traceback" | tail -40
-cp "logs/train-$PREFIX.log" "reports/runs/$PREFIX-v3/train-log.txt"
+if [ "${SKIP_TRAIN:-0}" = "1" ]; then
+  echo "== [1/3] 跳过训练(SKIP_TRAIN=1),直接合并已有 checkpoint =="
+else
+  echo "== [1/3] swift sft $CFG $(date +%T) =="
+  "$SWIFT" sft "$CFG" 2>&1 | tee "logs/train-$PREFIX.log" | { grep -iE "filter|truncat|delete|liger|train_loss|eval_loss|Error|Traceback" || true; } | tail -40
+  cp "logs/train-$PREFIX.log" "reports/runs/$PREFIX-v3/train-log.txt"
+fi
 
 # 2) 合并 LoRA:取 best checkpoint(load_best_model_at_end 会把最佳权重留在最后保存的目录里,
 #    保险起见按 trainer_state 找 best_model_checkpoint,找不到再退回最新)
 echo "== [2/3] merge $(date +%T) =="
-BEST=$(ls -d "$OUT"/v*/checkpoint-* "$OUT"/checkpoint-* 2>/dev/null | sort -V | tail -1)
-STATE=$(ls "$OUT"/v*/checkpoint-*/trainer_state.json "$OUT"/checkpoint-*/trainer_state.json 2>/dev/null | sort -V | tail -1)
+# set -e 下 VAR=$(cmd) 里 cmd 非零会直接退出脚本——ls 的 glob 只要有一个模式没匹配就非零,所以全部兜 || true
+BEST=$( { ls -d "$OUT"/v*/checkpoint-* "$OUT"/checkpoint-* 2>/dev/null || true; } | sort -V | tail -1 || true)
+STATE=$( { ls "$OUT"/v*/checkpoint-*/trainer_state.json "$OUT"/checkpoint-*/trainer_state.json 2>/dev/null || true; } | sort -V | tail -1 || true)
 if [ -n "$STATE" ]; then
-  B=$(python3 -c "import json,sys; print(json.load(open('$STATE')).get('best_model_checkpoint') or '')" 2>/dev/null || true)
+  B=$("$HOME/swift-env/bin/python" -c "import json,sys; print(json.load(open('$STATE')).get('best_model_checkpoint') or '')" 2>/dev/null || true)
   [ -n "$B" ] && [ -d "$B" ] && BEST="$B"
 fi
+[ -n "$BEST" ] && [ -d "$BEST" ] || { echo "✗ 找不到 checkpoint(output_dir=$OUT)"; ls -R "$OUT" | head; exit 2; }
 echo "   checkpoint: $BEST"
 "$SWIFT" export --adapters "$BEST" --merge_lora true --output_dir "$OUT/merged" 2>&1 | tail -3
 ls "$OUT/merged" | head -3
