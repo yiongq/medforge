@@ -11,13 +11,14 @@
 #   bash scripts/eval_p2_arms.sh [模型名] [臂列表,逗号分隔]
 #   bash scripts/eval_p2_arms.sh Qwen/Qwen3.5-4B smoke          # 只冒烟
 #   RUN_PREFIX=dpo bash scripts/eval_p2_arms.sh fang04/medforge-qwen3.5-4b-dpo sample,forcing   # 训练臂在 v3 下重评
-#   SEED=43 bash scripts/eval_p2_arms.sh Qwen/Qwen3.5-4B sample  # 多 seed:run 名带 -s43
+#   SETS=cmb-val,medxpertqa SEED=43 bash scripts/eval_p2_arms.sh Qwen/Qwen3.5-4B sample  # 多 seed 只补小卷,run 名带 -s43
 # 模型名以 Qwen/ 开头走 ModelScope,其它含 "/" 的按 HF 仓库走(hf-mirror),不含 "/" 的当本地路径。
 set -euo pipefail
 MODEL="${1:-Qwen/Qwen3.5-4B}"
 ARMS="${2:-greedy,sample,forcing,abstain,greedy32k}"
 PORT="${PORT:-8000}"
 RUN_PREFIX="${RUN_PREFIX:-base}"        # run 目录名前缀:base-v3-sample / dpo-v3-sample
+SETS="${SETS:-cmexam,cmb-val,medxpertqa}"  # 多 seed 只补小卷时:SETS=cmb-val,medxpertqa
 SEED="${SEED:-42}"
 SEED_SUFFIX=""; [ "$SEED" != "42" ] && SEED_SUFFIX="-s$SEED"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
@@ -44,7 +45,7 @@ if ! curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null; then
 fi
 
 # 抽样卷与 v2 完全一致(同 seed 同 k 才是同一批题,k 改了就不是前缀),三卷都能与存档逐题配对
-E="--endpoint http://127.0.0.1:$PORT/v1 --model $RUN_PREFIX --sets cmexam,cmb-val,medxpertqa --samples cmexam=2000,medxpertqa=1000 --concurrency 32"
+E="--endpoint http://127.0.0.1:$PORT/v1 --model $RUN_PREFIX --sets $SETS --samples cmexam=2000,medxpertqa=1000 --concurrency 32"
 
 run() {  # $1 = run-name, 其余透传给 medforge.eval.run
   local name="$1"; shift
