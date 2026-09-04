@@ -27,12 +27,16 @@ unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/n
 mkdir -p logs
 
 # vllm 默认走 HF Hub 拉模型,不认 ModelScope 缓存:先解析成本地路径(snapshot_download 幂等)
-case "$MODEL" in
-  Qwen/*) MODEL_PATH=$(uv run python -c "from modelscope import snapshot_download; print(snapshot_download('$MODEL'))") ;;
-  */*)    export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
-          MODEL_PATH=$(uv run python -c "from huggingface_hub import snapshot_download; print(snapshot_download('$MODEL'))") ;;
-  *)      MODEL_PATH="$MODEL" ;;   # 本地路径(如 output/sft_rft_v1/merged)
-esac
+if [ -d "$MODEL" ]; then
+  MODEL_PATH="$MODEL"             # 本地目录优先(如 output/sft_distill_v1/merged,也含斜杠,不能落到 HF 分支)
+else
+  case "$MODEL" in
+    Qwen/*) MODEL_PATH=$(uv run python -c "from modelscope import snapshot_download; print(snapshot_download('$MODEL'))") ;;
+    */*)    export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+            MODEL_PATH=$(uv run python -c "from huggingface_hub import snapshot_download; print(snapshot_download('$MODEL'))") ;;
+    *)      echo "✗ 模型 $MODEL 既不是本地目录也不是仓库名"; exit 2 ;;
+  esac
+fi
 if ! curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null; then
   echo "== 起 vLLM($MODEL_PATH)=="
   # 双重脱离:ssh 会话断了服务也不断。max-model-len 要装下 prompt + 32768 输出(MedXpertQA 题面可达 1k token)。
