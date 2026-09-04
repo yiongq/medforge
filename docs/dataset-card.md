@@ -26,18 +26,31 @@ tags:
 
 采样题源:`FreedomIntelligence/medical-o1-verifiable-problem`,已对全部评测集做字面去污染。
 
-## eval-outputs/ · 四方案的完整原始答卷
+## eval-outputs/ · 原始答卷
 
-`base`(协议 v1)、`base-v2`、`sft-v2`(2024 蒸馏教材)、`sft-r1-v2`(2025 R1 蒸馏教材),
-每份含三套考卷的 `*.outputs.jsonl`(模型作答全文)与 `*.scored.jsonl`(逐题判分)。
+每个压缩包是一个 run 目录:`*.outputs.jsonl`(模型作答全文,含 finish_reason / completion_tokens,v3 起)、
+`*.scored.jsonl`(逐题判分)、`*.usability.jsonl`(逐题标签:收尾 / 声明 / 严格口径 / 退化)、`run_meta.json`(协议指纹)、`summary.md`。
 
-有一个细节值得一看:同样是三套考卷的全部答卷,**基座压缩后 26 MB,而抄过旧教材的模型只有 1.3 MB**
-——蒸馏 SFT 对思考长度的压制,连文件体积都藏不住。
+**MedXpertQA 的作答全文一律不收录**(只留判分与标签):其论文附录 A 要求不以任何形式在线分享样例,而模型思考流常整段复述题目。
+2026-09-04 起旧包已按此重新打包;需要复现的请按 GitHub 仓库的评测命令自行生成。
 
-## 评测协议(v2)
+| 包 | 协议 | 内容 |
+|---|---|---|
+| `base.tar.gz` | v1(贪心,max_tokens 2048,全量卷) | 基座 Qwen3.5-4B,W1 底分存档;v1 会截断思考型模型,已弃用 |
+| `base-v2.tar.gz` / `sft-v2` / `sft-r1-v2` / `dpo-v2` | v2(贪心,8192,固定种子抽样卷) | W2 四方案:基座 / 2024 蒸馏教材 SFT / 2025 R1 蒸馏教材 SFT / 自采样 DPO |
+| `base-v3-greedy.tar.gz` | v2 协议在新引擎复跑 | 与 base-v2 配对 p=0.73:引擎无漂移;同权重两次贪心之间 20% 题目对错翻转 |
+| `base-v3-sample.tar.gz` | **v3**:官方卡采样参数(1.0 / 0.95 / 20 / min_p 0 / presence 1.5)+ 32768 | 三卷收尾 100%,CMExam 严格口径 74.0%(贪心 59.6%) |
+| `base-v3-forcing.tar.gz` | 贪心 8192 + 撞上限时强写 `</think>\n\n答案:` 续写 32 token | 73.5%:一条 harness 补丁拿到几乎全部收益 |
+| `base-v3-abstain.tar.gz` | 贪心 8192 + 提示词允许写「答案:不确定」 | 2000 题只弃权 1 题 |
+| `base-v3-greedy32k.tar.gz` | 贪心 + 32768 | 预算翻四倍只 +4pp,18~55% 的题写满仍在循环 |
 
-temperature 0 · max_tokens 8192 · 固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量 280;CMB-val 是官方 dev 池,非榜单卷)。
-判分 = 规则层抽取答案声明 + LLM 仲裁兜底;验证器经 200 题人工校准(一致率 96.5%);
-弃权计错但单独统计。完整报告见 [GitHub 仓库](https://github.com/yiongq/medforge)。
+P2 解码裁决的完整报告:[reports/p2-decoding-arms.md](https://github.com/yiongq/medforge/blob/main/reports/p2-decoding-arms.md)。
+
+## 评测协议
+
+- **v2**(W2 成绩表):temperature 0 · max_tokens 8192 · 固定种子抽样卷(CMExam 2000 / MedXpertQA 1000 / CMB-val 全量 280;CMB-val 是官方 dev 池,非榜单卷)。
+  贪心解码对思考型基座会导致大面积复读未收尾,旧判分会从复读段刮出答案计分——W2 审查(2026-09-03)已订正,见仓库 README。
+- **v3**(2026-09-04 起默认):Qwen3.5-4B 官方卡思考模式采样参数 + 32768 预算 + 截断守卫(未收尾 / 弃权 / 缺失分列)+ finish_reason 落盘。
+- 判分 = 规则层抽取答案声明(只看 `</think>` 之后)+ LLM 仲裁兜底;验证器经 200 题校准(混合一致率 96.5%,LLM 层单独 94.1%,校准集为开放题,与实际判的选择题分布不同,待重校准);弃权计错但单独统计。
 
 > ⚠️ 研究与工程实践产物,不构成任何医疗建议。
