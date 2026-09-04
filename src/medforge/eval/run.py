@@ -73,7 +73,7 @@ MODES = ("plain", "budget-forcing")
 # 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径
 PROTOCOL_KEYS = (
     "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
-    "prompt", "prompt_sha", "mode", "samples", "limit", "thinking", "llm_judge",
+    "prompt", "prompt_sha", "mode", "extra_body", "samples", "limit", "thinking", "llm_judge",
 )
 
 
@@ -102,6 +102,7 @@ def _gen_outputs(
     prompt_variant: str = "default",
     mode: str = "plain",
     timeout: float = 300.0,
+    extra_body: dict | None = None,
 ) -> dict[str, dict]:
     """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens", "forced"}}。"""
     from openai import OpenAI
@@ -128,7 +129,9 @@ def _gen_outputs(
     # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
     # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
     sampling = {"temperature": temperature, "top_p": top_p, "presence_penalty": presence_penalty, "seed": seed}
-    extra = {"top_k": top_k, "min_p": min_p}  # vLLM 私有参数(top_k -1 = 不限),OpenAI SDK 不认所以走 extra_body
+    # vLLM 私有参数(top_k -1 = 不限),OpenAI SDK 不认所以走 extra_body;API 厂商(DeepSeek 等)对不认识的键静默忽略。
+    # extra_body 可再叠加厂商开关,如 DeepSeek 的 {"thinking": {"type": "enabled"}}
+    extra = {"top_k": top_k, "min_p": min_p, **(extra_body or {})}
 
     def gen_one(s: Sample) -> dict:
         prompt = (p_choice if s.is_choice else p_open).format(question=s.render_question())
@@ -138,9 +141,15 @@ def _gen_outputs(
         )
         ch = resp.choices[0]
         usage = getattr(resp, "usage", None)
+        output = ch.message.content or ""
+        # API 厂商(DeepSeek / OpenAI 兼容层)把思考放在 reasoning_content、答案放在 content;
+        # 并成 vLLM+Qwen 的形态「思考</think>\n\n答案」,守卫与严格口径就对所有来源一视同仁
+        reasoning = getattr(ch.message, "reasoning_content", None)
+        if reasoning:
+            output = f"{reasoning.rstrip()}\n</think>\n\n{output}"
         row = {
             "id": s.id,
-            "output": ch.message.content or "",
+            "output": output,
             "finish_reason": ch.finish_reason,
             "completion_tokens": getattr(usage, "completion_tokens", None) if usage else None,
             "forced": False,
@@ -291,7 +300,7 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
 def protocol_line(meta: dict) -> str:
     keys = (
         "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
-        "prompt", "prompt_sha", "mode", "thinking", "llm_judge", "git",
+        "prompt", "prompt_sha", "mode", "extra_body", "thinking", "llm_judge", "git",
     )
     parts = [f"{k}={meta.get(k)}" for k in keys]
     parts.append("抽样=" + (",".join(f"{k}={v}" for k, v in meta["samples"].items()) if meta.get("samples") else "全量"))
@@ -313,6 +322,11 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="每套只跑前 N 题(冒烟用)")
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--timeout", type=float, default=300.0, help="单条请求超时秒数;32768 预算的贪心臂要给 3600")
+    ap.add_argument("--api-key-env", default="", help="从哪个环境变量读端点的 API key(不写 = vLLM 本地,EMPTY);如 MEDFORGE_JUDGE_API_KEY")
+    ap.add_argument(
+        "--extra-body", default="",
+        help='附加到每个请求的 JSON,进协议指纹;如 DeepSeek 开思考:\'{"thinking": {"type": "enabled"}}\'',
+    )
     ap.add_argument("--no-llm-judge", action="store_true", help="判分禁用 LLM 兜底(纯规则,便宜)")
     # 协议 v1=2048、v2=8192 均为存档协议;v3=32768(官方卡建议,P2 实测三卷无一撞顶,最长 21k)
     ap.add_argument("--max-tokens", type=int, default=32768)
@@ -354,10 +368,16 @@ def main() -> None:
         "temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": args.min_p,
         "presence_penalty": args.presence_penalty, "seed": args.seed,
         "prompt_variant": args.prompt, "mode": args.mode, "timeout": args.timeout,
+        "extra_body": json.loads(args.extra_body) if args.extra_body else None,
     }
+    api_key = os.environ.get(args.api_key_env, "") if args.api_key_env else "EMPTY"
+    if args.api_key_env and not api_key:
+        rprint(f"[red]✗ 环境变量 {args.api_key_env} 为空(.env 已加载)[/]")
+        sys.exit(2)
     meta = {
         "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint,
         "max_tokens": args.max_tokens, **{k: v for k, v in gen.items() if k not in ("prompt_variant", "timeout")},
+        "extra_body": json.dumps(gen["extra_body"], ensure_ascii=False, sort_keys=True) if gen["extra_body"] else None,
         "prompt": args.prompt, "prompt_sha": prompt_sha(args.prompt),
         "samples": sample_map, "limit": args.limit,
         "thinking": args.thinking, "llm_judge": not args.no_llm_judge,
@@ -376,7 +396,7 @@ def main() -> None:
             samples = samples[: args.limit]
         scored = run_set(
             name.strip(), samples, out_dir,
-            base_url=args.endpoint, model=args.model,
+            base_url=args.endpoint, api_key=api_key, model=args.model,
             concurrency=args.concurrency, max_tokens=args.max_tokens,
             allow_llm_judge=not args.no_llm_judge, thinking=THINKING_MODES[args.thinking], gen=gen,
         )
