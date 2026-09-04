@@ -1,0 +1,32 @@
+{
+  "run_name": "distill-v3-forcing",
+  "model": "distill",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 8192,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "mode": "budget-forcing",
+  "extra_body": null,
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "3277836-dirty",
+  "created": "2026-09-04T20:15:18+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "3277836-dirty",
+      "created": "2026-09-04T20:15:18+08:00"
+    }
+  ]
+}
