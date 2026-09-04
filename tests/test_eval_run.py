@@ -27,6 +27,7 @@ SCRIPT = {
 
 
 class _Handler(BaseHTTPRequestHandler):
+    seen_bodies: ClassVar[list[dict]] = []
     seen_prompts: ClassVar[list[str]] = []  # 记录收到的提示词,测试提示词变体与 budget forcing 的裸 prompt
 
     def do_POST(self):
@@ -39,9 +40,13 @@ class _Handler(BaseHTTPRequestHandler):
         else:
             prompt = body["messages"][0]["content"]
             _Handler.seen_prompts.append(prompt)
+            _Handler.seen_bodies.append(body)
             answer, reason = next((v for k, v in SCRIPT.items() if f"题号{k}" in prompt), ("答案:E", "stop"))
+            message = {"role": "assistant", "content": answer}
+            if body.get("thinking"):  # 模拟 DeepSeek:思考放 reasoning_content,答案放 content
+                message["reasoning_content"] = "先看选项……"
             resp = {
-                "choices": [{"message": {"role": "assistant", "content": answer}, "finish_reason": reason}],
+                "choices": [{"message": message, "finish_reason": reason}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": len(answer)},
             }
         data = json.dumps(resp).encode()
@@ -190,3 +195,30 @@ def test_main_wires_mode_prompt_and_fingerprint(mock_server, tmp_path, monkeypat
     assert any(p.startswith("<|im_start|>user") for p in _Handler.seen_prompts)  # forcing 的裸 prompt 真的发出去了
     summary = (tmp_path / "reports" / "runs" / "wire" / "summary.md").read_text()
     assert "mode=budget-forcing" in summary and "prompt=abstain" in summary
+
+
+def test_api_model_reasoning_content_merged_and_extra_body(mock_server, tmp_path, monkeypatch):
+    """API 厂商把思考放 reasoning_content:并成「思考</think>\n\n答案」,严格口径与本地 vLLM 一视同仁;
+    --extra-body 透传进请求并进协议指纹;--api-key-env 从环境变量取 key。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    monkeypatch.setenv("FAKE_KEY", "sk-test")
+    _Handler.seen_bodies.clear()
+    monkeypatch.setattr(sys, "argv", ["run", "--endpoint", mock_server, "--model", "api", "--run-name", "api", "--sets", "syn",
+                                      "--no-llm-judge", "--api-key-env", "FAKE_KEY",
+                                      "--extra-body", '{"thinking": {"type": "enabled"}}'])
+    run_mod.main()
+    body = _Handler.seen_bodies[-1]
+    assert body["thinking"] == {"type": "enabled"} and body["top_k"] == 20  # 厂商开关与 vLLM 参数都在 extra_body 里
+    out = json.loads((tmp_path / "reports" / "runs" / "api" / "syn.outputs.jsonl").read_text().splitlines()[0])
+    assert out["output"] == "先看选项……\n</think>\n\n分析各选项后可以确定。答案:B"
+    row = json.loads((tmp_path / "reports" / "runs" / "api" / "syn.scored.jsonl").read_text().splitlines()[0])
+    assert row["correct"] is True  # thinking=on 默认:合并后有 </think>,守卫放行,规则层只看答案段
+    meta = json.loads((tmp_path / "reports" / "runs" / "api" / "run_meta.json").read_text())
+    assert meta["extra_body"] == '{"thinking": {"type": "enabled"}}'
