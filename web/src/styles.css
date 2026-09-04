@@ -23,6 +23,9 @@
   --alert-line: #E0785A44;
   --skip: #7E8A93;
   --skip-soft: #7E8A9322;
+  --v3: #8AA6FF;
+  --v3-soft: #8AA6FF1F;
+  --v3-line: #8AA6FF55;
   --shadow: 0 1px 2px #0006, 0 10px 28px #0003;
 }
 @media (prefers-color-scheme: light) {
@@ -44,6 +47,9 @@
     --alert-line: #B24A2C44;
     --skip: #8A8F93;
     --skip-soft: #8A8F9318;
+    --v3: #3B5BD9;
+    --v3-soft: #3B5BD914;
+    --v3-line: #3B5BD955;
     --shadow: 0 1px 2px #141a1e0d, 0 8px 24px #141a1e08;
   }
 }
@@ -65,6 +71,9 @@
   --alert-line: #B24A2C44;
   --skip: #8A8F93;
   --skip-soft: #8A8F9318;
+  --v3: #3B5BD9;
+  --v3-soft: #3B5BD914;
+  --v3-line: #3B5BD955;
   --shadow: 0 1px 2px #141a1e0d, 0 8px 24px #141a1e08;
 }
 
@@ -143,6 +152,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stat .v { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
 .stat .v.up { color: var(--signal); }
 .stat .v.down { color: var(--alert); }
+.stat .v.v3 { color: var(--v3); }
 .stat .k { color: var(--muted); font-size: 0.74rem; line-height: 1.4; }
 
 /* ── 区块头 ───────────────────────────────────── */
@@ -161,6 +171,9 @@ section { padding-top: 3rem; }
 .matrix-row.head > div { padding: 0.65rem 1.2rem; font-size: 0.76rem; color: var(--muted); letter-spacing: 0.05em; }
 .matrix-row.head > div + div, .matrix-row .cell { border-left: 1px solid var(--line); }
 .matrix-row.head .tag { color: var(--muted-2); }
+.matrix-row.v3 { background: var(--v3-soft); border-top: 1px solid var(--v3-line); }
+.who .proto-tag { white-space: nowrap; margin-left: 0.4rem; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.02rem 0.3rem; border-radius: 3px; color: var(--muted); background: var(--surface-2); vertical-align: 0.08em; }
+.who .proto-tag.v3 { color: var(--v3); background: var(--v3-soft); border: 1px solid var(--v3-line); }
 .who { padding: 0.9rem 1.2rem; display: flex; gap: 0.6rem; align-items: flex-start; }
 .who .mark { width: 3px; align-self: stretch; border-radius: 2px; }
 .who .label { font-size: 0.9rem; font-weight: 700; }
@@ -175,8 +188,10 @@ section { padding-top: 3rem; }
 .cell .track { position: relative; height: 10px; border-radius: 3px; background: var(--surface-2); }
 .cell .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--signal); }
 .cell .fill.down { background: var(--alert); }
+.cell .fill.v3 { background: var(--v3); }
 .cell .ci { position: absolute; top: -2px; bottom: -2px; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); opacity: 0.55; }
 .cell .ci-text { font-size: 0.7rem; color: var(--muted-2); margin-top: 0.4rem; white-space: nowrap; }
+.matrix-note { margin-top: 0.7rem; }
 
 /* ── 筛选与导航 ───────────────────────────────── */
 .controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; align-items: center; margin: 1.1rem 0; }
@@ -202,16 +217,19 @@ ol.opts li.gold { color: var(--ink); }
 ol.opts li.gold .k { color: var(--signal); }
 .gold-badge { display: inline-flex; padding: 0.05rem 0.5rem; border-radius: 4px; background: var(--signal-soft); color: var(--signal); font-size: 0.76rem; font-weight: 700; }
 
-/* ── 四栏对照 ─────────────────────────────────── */
-/* 四栏并排是这一节的存在理由:显式断点保证宽屏一定是 4 列,
-   而不是让 auto-fit 在 1200px 附近把第四栏挤到下一行(实测) */
-.grid { display: grid; gap: 0.8rem; margin-top: 0.9rem; grid-template-columns: 1fr; }
+/* ── 并排对照 ─────────────────────────────────── */
+/* 并排是这一节的存在理由:显式断点保证宽屏一定是整行,
+   而不是让 auto-fit 在断点附近把最后一栏挤到下一行(实测)。
+   栏数由 --cols(组件按 run 数下发)决定,断点只管什么宽度才允许几栏 */
+.grid { display: grid; gap: 0.8rem; margin-top: 0.9rem; grid-template-columns: 1fr; --cols: 4; }
 @media (min-width: 720px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1160px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1080px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1360px) { .grid { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); } }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow); }
 .card.ok { border-top: 3px solid var(--signal); }
 .card.bad { border-top: 3px solid var(--alert); }
 .card.skip { border-top: 3px solid var(--skip); }
+.card .proto-tag { white-space: nowrap; margin-left: 0.4rem; font-size: 0.66rem; font-weight: 700; padding: 0.02rem 0.3rem; border-radius: 3px; color: var(--v3); background: var(--v3-soft); border: 1px solid var(--v3-line); }
 .card-head { padding: 0.7rem 0.9rem 0.55rem; border-bottom: 1px solid var(--line); }
 .card-head .who-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
 .card-head h3 { font-size: 0.94rem; }

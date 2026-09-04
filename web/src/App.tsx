@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Bench, Replay } from './types'
+import type { CSSProperties } from 'react'
+import type { Bench, Replay, ScoreRow } from './types'
 import { ScoreMatrix } from './components/ScoreMatrix'
 import { AnswerCard } from './components/AnswerCard'
 import { BenchCharts } from './components/BenchCharts'
 import { LivePanel } from './components/LivePanel'
 
-const BUCKET_ORDER = ['regression', 'dpo_fix', 'mixed', 'all_wrong', 'all_correct']
+const BUCKET_ORDER = ['decoding_fix', 'regression', 'dpo_fix', 'mixed', 'all_wrong', 'all_correct']
 const THEME_KEY = 'medforge.theme'
 type Theme = 'system' | 'light' | 'dark'
 
 const SET_SHORT: Record<string, string> = { cmexam: 'CMExam', 'cmb-val': 'CMB-val', medxpertqa: 'MedXpertQA' }
+const SET_ORDER = ['cmexam', 'cmb-val', 'medxpertqa']
+const BASELINE = 'base-v2'
+const V3_RUN = 'base-v3-sample'
+
+/** 首屏一律用严格口径(写完 ∧ 有结论 ∧ 答对);没跑过 usability 的 run 才退回宽口径。 */
+const strictOf = (r: ScoreRow | undefined) => (r ? r.strict ?? r.acc : null)
 
 export default function App() {
   const [data, setData] = useState<Replay | null>(null)
@@ -85,9 +92,19 @@ export default function App() {
   const q = list[idx]
   const maxChars = q ? Math.max(...Object.values(q.answers).map((a) => a.chars), 1) : 1
   const cell = (run: string, set: string) => data.summary.find((s) => s.run === run && s.set === set)
-  const baseMain = cell('base-v2', 'cmexam')
-  const sftOldMain = cell('sft-v2', 'cmexam')
-  const oldDelta = baseMain && sftOldMain ? sftOldMain.acc - baseMain.acc : null
+
+  // 首屏数字全部从 summary 现算,不硬编码:改了协议或重跑了某一臂,文案会跟着动
+  const baseMain = cell(BASELINE, 'cmexam')
+  const v3Main = cell(V3_RUN, 'cmexam')
+  const baseStrict = strictOf(baseMain)
+  const v3Strict = strictOf(v3Main)
+  const decodeGain = baseStrict !== null && v3Strict !== null ? v3Strict - baseStrict : null
+  const v3Rows = data.summary.filter((r) => r.run === V3_RUN && r.finished !== undefined)
+  const v3Finished = v3Rows.length ? Math.min(...v3Rows.map((r) => r.finished!)) : null
+  const baseFinished = data.summary
+    .filter((r) => r.run === BASELINE && r.finished !== undefined)
+    .map((r) => r.finished!)
+  const hasV3 = v3Main !== undefined
   const peak = (l: string) => Math.max(...(benches?.find((b) => b.label === l)?.levels.map((lv) => lv.output_tok_s ?? 0) ?? [0]))
   const fp8Gain = benches && peak('bf16') ? Math.round(((peak('fp8') - peak('bf16')) / peak('bf16')) * 100) : null
 
@@ -97,29 +114,43 @@ export default function App() {
       <div className="shell">
         <section id="finding" className="hero" style={{ paddingTop: '3rem' }}>
           <div>
-            <div className="eyebrow">W2 后训练消融 · 核心发现</div>
-            <h1>对会思考的基座,<br />抄蒸馏教材是全线降分。</h1>
+            <div className="eyebrow">P2 解码裁决 · 核心发现</div>
+            <h1>W2 的成绩表,<br />量的是解码方式,不是模型。</h1>
             <p className="lede">
-              换更强的老师能大幅止损(主力卷 −11.5pp → −3.3pp),但困难卷两代教材同伤——
-              说明破坏原生深推理的是「抄外部笔记」这个动作本身,与教材质量无关。
-              验证器驱动的 DPO 三卷与基座持平,逐题却翻转了 413 题。
+              {hasV3 ? (
+                <>
+                  同一份 Qwen3.5-4B 基座权重,不训练、不改提示词,只把贪心解码换成官方采样参数 + 32k 预算:
+                  CMExam 严格口径 {baseStrict?.toFixed(1)}% → {v3Strict?.toFixed(1)}%
+                  ({decodeGain !== null && decodeGain > 0 ? '+' : ''}{decodeGain?.toFixed(1)}pp),
+                  三卷收尾率全部到 {v3Finished?.toFixed(0)}%。
+                  三个训练臂仍是 v2 协议下的历史数字,<b>尚未在 v3 下重评</b>——所以下表末行与前四行之间的差,
+                  该读成「解码方式的差」,不是「谁的模型更好」。
+                </>
+              ) : (
+                <>协议 v3 的成绩尚未导出,当前表格仍是 v2 协议下的历史数字。</>
+              )}
             </p>
             <div className="hero-actions">
-              <a className="btn-solid" href="#scores">看四方案成绩板</a>
+              <a className="btn-solid" href="#scores">看成绩对照板</a>
               <a className="btn-ghost" href="#replay">逐题翻查答卷</a>
             </div>
             <div className="stats">
               <div className="stat">
-                <div className="v num">{baseMain?.acc.toFixed(1)}%</div>
-                <div className="k">主力卷最高分<br />仍是未经训练的基座</div>
+                <div className="v num v3">{v3Strict?.toFixed(1) ?? '—'}%</div>
+                <div className="k">正确解码的基座<br />主力卷严格口径</div>
               </div>
               <div className="stat">
-                <div className="v num down">{oldDelta?.toFixed(1)}pp</div>
-                <div className="k">抄 2024 蒸馏教材<br />主力卷跌幅</div>
+                <div className="v num up">
+                  {decodeGain !== null && decodeGain > 0 ? '+' : ''}{decodeGain?.toFixed(1) ?? '—'}pp
+                </div>
+                <div className="k">不训练、只换解码<br />相对存档基座的涨幅</div>
               </div>
               <div className="stat">
-                <div className="v num">413<span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>/2000</span></div>
-                <div className="k">DPO 翻转题数<br />修 206 / 坏 207,净零</div>
+                <div className="v num v3">{v3Finished?.toFixed(0) ?? '—'}%</div>
+                <div className="k">
+                  v3 三卷收尾率<br />
+                  v2 下只有 {baseFinished.length ? `${Math.min(...baseFinished).toFixed(0)}–${Math.max(...baseFinished).toFixed(0)}` : '—'}%
+                </div>
               </div>
               {fp8Gain !== null && (
                 <div className="stat">
@@ -130,11 +161,11 @@ export default function App() {
             </div>
           </div>
           <div className="protocol">
-            <h3>评测协议 v2</h3>
-            <div className="sub">固定种子抽样卷 · temperature 0 · 8192 tokens · 弃权计错</div>
+            <h3>评测协议</h3>
+            <div className="sub">同一批固定种子抽样卷 · 同一个判分器 · 两套解码并列</div>
             <div className="rows">
-              {['cmexam', 'cmb-val', 'medxpertqa'].map((s) => {
-                const r = cell('base-v2', s)
+              {SET_ORDER.map((s) => {
+                const r = cell(BASELINE, s)
                 return (
                   <div key={s}>
                     <span>{SET_SHORT[s]}</span>
@@ -142,12 +173,16 @@ export default function App() {
                   </div>
                 )
               })}
-              <div><span>判分</span><span className="num">规则 + LLM 兜底</span></div>
+              <div><span>解码 v2</span><span className="num">贪心 · 8,192 tokens</span></div>
+              <div><span>解码 v3</span><span className="num">官方采样 · 32,768 tokens</span></div>
+              <div><span>判分</span><span className="num">规则 + LLM 兜底 · 截断守卫</span></div>
               <div><span>验证器校准</span><span className="num">200 题 · 96.5%</span></div>
               <div><span>去污染</span><span className="num">10-gram 字面查重</span></div>
             </div>
             <p className="note" style={{ marginTop: '0.9rem', marginBottom: 0 }}>
               CMB 官方 test 集不公开答案(防刷榜),故只用其 val 子集作辅助卷;主力卷为 CMExam。
+              表里的 v2 基线是 8 月的存档答卷({baseStrict?.toFixed(1)}%);报告主表用的是同机同期复跑的贪心臂(59.6%),
+              两者逐题配对无差异(p=0.73),换哪一个都不改变结论。
             </p>
           </div>
         </section>
@@ -155,10 +190,14 @@ export default function App() {
         <section id="scores">
           <div className="section-head">
             <h2>成绩对照</h2>
-            <span className="note">四方案 × 三张考卷,同一协议下并排</span>
+            <span className="note">
+              {data.meta.runs.length} 个配置 × {SET_ORDER.filter((s) => data.summary.some((r) => r.set === s)).length} 张考卷,同一批题、同一个判分器
+            </span>
           </div>
           <p className="sub-note">
-            条内竖线为 Wilson 95% 置信区间;右侧为相对原装基座的涨跌,落在区间内即标注「持平」。条形按 0–100 绝对刻度,不按列归一化。
+            主数字是严格口径;条内竖线为该口径的 Wilson 95% 置信区间;右侧为相对存档基座(原装基座)的涨跌,
+            基座落在本格区间内即标注「持平」。条形按 0–100 绝对刻度,不按列归一化。
+            涨跌标注只是区间重叠的粗判,配对 McNemar 检验与 Holm/BH 多重比较校正见仓库 <code>reports/usability-v3.md</code>。
           </p>
           <ScoreMatrix summary={data.summary} runs={data.meta.runs} />
         </section>
@@ -166,7 +205,7 @@ export default function App() {
         <section id="replay">
           <div className="section-head">
             <h2>逐题对照台</h2>
-            <span className="note">先看结论,想看推理再展开——字数条的长短差异本身就是现象</span>
+            <span className="note">先看结论,想看推理再展开——「换解码就会了」一栏是本次裁决最直观的证据</span>
           </div>
 
           <div className="controls">
@@ -221,7 +260,7 @@ export default function App() {
                 )}
               </div>
 
-              <div className="grid">
+              <div className="grid" style={{ '--cols': data.meta.runs.length } as CSSProperties}>
                 {data.meta.runs.map((run) => (
                   <AnswerCard key={run.key} run={run} answer={q.answers[run.key]} maxChars={maxChars} />
                 ))}
@@ -256,7 +295,8 @@ export default function App() {
           </div>
           <div>
             训练数据对全部考卷做过字面去污染(报告见仓库);判分由规则层 + LLM 兜底的验证器完成,
-            上岗前经 200 题校准(一致率 96.5%)。
+            上岗前经 200 题校准(一致率 96.5%)。严格口径的逐题标签在 <code>reports/runs/&lt;run&gt;/&lt;set&gt;.usability.jsonl</code>,
+            本页每个数字都可以用 <code>medforge.eval.usability --from-tags</code> 复算。
           </div>
           <div>⚠️ 研究与工程实践,输出不构成任何医疗建议。</div>
         </footer>
