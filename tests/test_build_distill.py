@@ -85,8 +85,9 @@ def _write_pool(tmp_path, samples, source: str = "cmexam-train"):
 
 
 def _row(qid: str, k: int = 0, *, reasoning: str = LONG_ZH, answer: str = "答案:B", finish: str = "stop") -> dict:
+    # completion_tokens 留空:长度闸门走字符估算路径,用例按文本长度构造;API token 路径另有专门用例
     return {"id": qid, "k": k, "reasoning": reasoning, "answer": answer,
-            "finish_reason": finish, "completion_tokens": 300}
+            "finish_reason": finish, "completion_tokens": None}
 
 
 def _write_samples(tmp_path, rows):
@@ -220,8 +221,24 @@ def test_gate5_format_and_language(tmp_path):
         _row("q2", 0, answer="综上,\\boxed{B}"),                         # 反例:判对但没有「答案:」字面
         _row("q3", 0, reasoning="Let me analyze each option carefully. " * 20),  # 反例:英文思考
     ]
-    stats, _, _ = _build(tmp_path, [_sample(f"q{i}") for i in (1, 2, 3)], rows, accept="any")
+    # 语言闸门默认关(基座与老师都用英文思考);这里显式打开验证它仍可用
+    stats, _, _ = _build(tmp_path, [_sample(f"q{i}") for i in (1, 2, 3)], rows, accept="any", zh_ratio_min=0.5)
     assert (stats["counts"]["g5_no_literal"], stats["counts"]["g5_zh_ratio"]) == (1, 1) and stats["n_med"] == 1
+    # 默认不筛语言:英文思考的 q3 进教材
+    stats, _, _ = _build(tmp_path, [_sample(f"q{i}") for i in (1, 2, 3)], rows, accept="any")
+    assert stats["counts"].get("g5_zh_ratio", 0) == 0 and stats["n_med"] == 2
+
+
+def test_gate4_uses_api_token_count_when_present(tmp_path):
+    """老师英文思考时按中文 1.6 字符/token 估算会高估两倍多;有 completion_tokens 就以它为准。"""
+    en = "Let me analyze each option carefully and reason about the pathophysiology. " * 60  # 约 4.6k 字符
+    rows = [dict(_row("q1", 0, reasoning=en), completion_tokens=1200),   # 真实 1200 token:合规
+            dict(_row("q2", 0, reasoning=en), completion_tokens=None)]   # 无 token 数:按 1.6 估 ≈ 2.9k,仍合规
+    stats, _, _ = _build(tmp_path, [_sample("q1"), _sample("q2")], rows, accept="any")
+    assert stats["n_med"] == 2 and stats["counts"].get("g4_think_long", 0) == 0
+    rows = [dict(_row("q1", 0, reasoning=en), completion_tokens=6000)]   # API 说 6000 token:超 4096,砍
+    stats, _, _ = _build(tmp_path, [_sample("q1")], rows, accept="any")
+    assert stats["counts"]["g4_think_long"] == 1 and stats["n_med"] == 0
 
 
 # ------------------------------------------------------------------ 成品形状与选样策略

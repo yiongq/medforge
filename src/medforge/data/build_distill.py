@@ -20,7 +20,8 @@
      采样与构造共用 render_prompt(),训练/评测提示词不可能再漂。
   ④ 20% 样本超过 max_length 被框架截断 —— 闸门 ④ 在数据侧硬筛长度(思考 / 答案 / 总长三条线),
      不依赖框架 truncation:被截断的教材末尾恰好是「答案:X」那一行,截掉就等于教「别写答案」。
-  ⑤ 教材把英文思考换成中文(这条本轮不存在:老师本来就中文)—— 闸门 ⑤ 仍量 reasoning 的 CJK 占比兜底。
+  ⑤ 教材把英文思考换成中文 —— 基座原生英文思考(存档 CJK 占比中位 5%),DeepSeek 老师同样英文思考,
+     语言分布一致;闸门 ⑤ 默认关(--zh-ratio-min 0),只在换了中文思考的老师时才该打开。
 
 老师侧要点(与 eval/run.py 的 v3 协议参照一致,这样「老师在考卷上的成绩」与蒸馏出的样本同源):
   temperature 1.0 / top_p 0.95 / presence_penalty 1.5,extra_body {"thinking": {"type": "enabled"}},
@@ -294,7 +295,7 @@ def build_dataset(
     max_think_tokens: int = 4096,
     max_answer_tokens: int = 512,
     train_max_length: int = TRAIN_MAX_LENGTH,
-    zh_ratio_min: float = 0.5,
+    zh_ratio_min: float = 0.0,
     general_ratio: float = 0.15,
     general_loader=None,
 ) -> dict:
@@ -358,8 +359,13 @@ def build_dataset(
         # ④ 长度 + ⑤ 格式与语言(逐条)
         survivors: list[dict] = []
         for r in correct:
-            think_t = est_tokens(r["reasoning"], chars_per_token)
             ans_t = est_tokens(r["answer"], chars_per_token)
+            # 思考段优先用 API 返回的真实 token 数(completion_tokens = 思考 + 答案):老师用英文思考时
+            # 按中文 1.6 字符/token 估算会高估两倍多,把正常样本当「过长」砍掉(实测 451 条)
+            if r.get("completion_tokens"):
+                think_t = max(0, int(r["completion_tokens"]) - ans_t)
+            else:
+                think_t = est_tokens(r["reasoning"], chars_per_token)
             if think_t < min_think_tokens:
                 counts["g4_think_short"] += 1
                 continue
@@ -562,7 +568,11 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--max-think-tokens", type=int, default=4096)
     b.add_argument("--max-answer-tokens", type=int, default=512)
     b.add_argument("--train-max-length", type=int, default=TRAIN_MAX_LENGTH, help="训练配置的 max_length,数据侧硬筛")
-    b.add_argument("--zh-ratio-min", type=float, default=0.5)
+    b.add_argument(
+        "--zh-ratio-min", type=float, default=0.0,
+        help="reasoning 的 CJK 占比下限;默认 0 = 不筛。基座原生用英文思考(存档 CJK 占比中位 5%),DeepSeek 老师也是英文思考,"
+             "两者一致就不存在「语言被换掉」的问题;实测设 0.5 会砍掉 99% 的样本",
+    )
     b.add_argument("--general-ratio", type=float, default=0.15, help="通用回放占比(build_sft.mix 同一公式);0 = 不混")
     args = ap.parse_args(argv)
 
