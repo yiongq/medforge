@@ -17,8 +17,24 @@ mkdir -p logs "reports/runs/$PREFIX-v3"
 [ -f "$DATA" ] || { echo "✗ 教材不存在: $DATA"; exit 2; }
 echo "== 教材 $DATA: $(wc -l < "$DATA") 条 =="
 
-# 0) 参数名核对:ms-swift 各版本参数名变过,写错会被静默忽略而不是报错
-"$SWIFT" sft --help 2>/dev/null | grep -oE -- "--(truncation_strategy|use_liger_kernel|lazy_tokenize|packing|tuner_type|eval_strategy|load_best_model_at_end)\b" | sort -u | tr '\n' ' '; echo
+# 0) 参数名核对:ms-swift 各版本参数名变过,写错会被静默忽略而不是报错。
+#    4.5.2 的 `swift sft --help` 只打印 6 行(懒解析),所以改为直接读 SftArguments 的 dataclass 字段;
+#    有未知键就退出——比训完才发现某个开关没生效便宜得多
+"$HOME/swift-env/bin/python" - "$CFG" <<'PY' || exit 2
+import dataclasses, importlib, sys, yaml
+mod = importlib.import_module("swift.arguments.sft_args")
+names = set()
+for n in dir(mod):
+    A = getattr(mod, n)
+    if n.endswith("Arguments") and dataclasses.is_dataclass(A):
+        for cls in A.__mro__:
+            if dataclasses.is_dataclass(cls):
+                names |= {f.name for f in dataclasses.fields(cls)}
+cfg = yaml.safe_load(open(sys.argv[1]))
+unknown = [k for k in cfg if k not in names]
+print(f"配置 {len(cfg)} 个键,ms-swift 未识别: {unknown}")
+sys.exit(1 if unknown else 0)
+PY
 "$HOME/.local/bin/uv" pip freeze --python "$HOME/swift-env/bin/python" > "reports/train-env-freeze-$(date +%Y%m%d).txt" 2>/dev/null || true
 
 # 1) 训练(前台,日志落盘;开训 3 分钟内看 filtered/truncated 计数——这是 W2 从没兑现的验收)
