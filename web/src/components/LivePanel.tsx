@@ -3,9 +3,21 @@ import { fmtChars } from '../lib'
 
 /** live 模式:连到一台正在跑的 vLLM,现场问自己的题。
  *
- *  与回放模式的分工:回放做「四方案对照」(数据已固化、永久在线),
+ *  与回放模式的分工:回放做「多方案并排对照」(数据已固化、永久在线),
  *  live 做「你自己出题」(需要 GPU 在线,端点由访客自填)。
- *  端点存 localStorage——没有后端可存,也不该把别人的地址硬编码进产物。 */
+ *  端点存 localStorage——没有后端可存,也不该把别人的地址硬编码进产物。
+ *
+ *  解码参数与协议 v3 的评测臂一致(官方推荐的思考模式采样 + 32768 预算)。
+ *  之前这里用的是 temperature 0 / 8192,那正是 P2 裁决判定为「量错了」的贪心协议:
+ *  访客现场问一题就会撞上复读循环、看不到结论,与站上的成绩表也对不上。
+ *  top_k 走 vLLM 的顶层扩展字段(OpenAI 协议本身没有这个参数)。 */
+const SAMPLING = {
+  temperature: 1.0,
+  top_p: 0.95,
+  top_k: 20,
+  presence_penalty: 1.5,
+  max_tokens: 32768,
+} as const
 const LS_KEY = 'medforge.endpoint'
 const THINK_END = '</think>'
 
@@ -37,7 +49,7 @@ export function LivePanel() {
       const res = await fetch(`${endpoint.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer EMPTY' },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: q }], stream: true, max_tokens: 8192, temperature: 0 }),
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: q }], stream: true, ...SAMPLING }),
         signal: ac.signal,
       })
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
@@ -86,6 +98,11 @@ export function LivePanel() {
         </label>
       </div>
       <textarea value={q} onChange={(e) => setQ(e.target.value)} rows={3} placeholder="输入一道医学题…" />
+      <p className="note" style={{ margin: 0 }}>
+        解码用官方采样参数(协议 v3):temperature {SAMPLING.temperature} · top_p {SAMPLING.top_p} ·
+        top_k {SAMPLING.top_k} · presence_penalty {SAMPLING.presence_penalty} · max_tokens{' '}
+        {SAMPLING.max_tokens.toLocaleString()}。与成绩表末行同一套参数;换成贪心会看到复读不收尾。
+      </p>
       <div className="live-actions">
         <button className="primary" onClick={ask} disabled={state === 'streaming'}>
           {state === 'streaming' ? '作答中…' : '提问'}
@@ -98,7 +115,7 @@ export function LivePanel() {
 
       {!endpoint && !text && (
         <p className="note">
-          回放模式的四方案对照无需任何服务;这里是「现场提问」——需要一台跑着 vLLM 的机器。
+          回放模式的并排对照无需任何服务;这里是「现场提问」——需要一台跑着 vLLM 的机器。
           起服务:<code>vllm serve fang04/medforge-qwen3.5-4b-dpo --served-model-name target --port 8000</code>,
           把它的地址填上面即可(浏览器直连,vLLM 默认放行跨域)。
         </p>

@@ -4,6 +4,8 @@ export interface RunMeta {
   key: RunKey
   label: string
   desc: string
+  /** 该 run 用的解码协议:v2 = 贪心 8192,v3 = 官方采样 32768 */
+  protocol?: 'v2' | 'v3'
 }
 
 export interface Answer {
@@ -39,14 +41,22 @@ export interface ScoreRow {
   label: string
   set: string
   n: number
+  protocol: 'v2' | 'v3'
+  /** 宽口径(as-scored):含 LLM 兜底与从复读段刮出的分 */
   acc: number
   ci: [number, number]
   abstain: number
+  /** 严格口径 = 写完 ∧ 有结论 ∧ 答对,前台主数字;没跑过 usability 的 run 缺此字段 */
+  strict?: number
+  strictCi?: [number, number]
+  /** 收尾率:输出里写出了 </think> 的比例 */
+  finished?: number
 }
 
 export interface Replay {
   meta: {
     protocol: string
+    protocols?: Record<string, string>
     runs: RunMeta[]
     sets: Record<string, string>
   }

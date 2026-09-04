@@ -33,7 +33,7 @@ reports/runs/*/*.outputs.jsonl
 web/node_modules/
 web/dist/
 # 回放数据破例入库(见下 !):Vercel 构建时不跑 Python,拉不到数据页面就是空的;
-# 3.2MB 一次性成本换「静态站零后端」的部署形态,值
+# 3.4MB 一次性成本换「静态站零后端」的部署形态,值(gzip 后约 0.8MB)
 
 # 租卡机上的运行日志(vLLM / 评测 stdout)
 logs/

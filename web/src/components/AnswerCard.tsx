@@ -3,8 +3,9 @@ import type { Answer, RunMeta } from '../types'
 import { extractDeclared, fmtChars, verdictOf } from '../lib'
 
 /** 一个方案的作答卡。设计要点:
- *  - 结论置顶、思考默认折叠——四栏并排时,先让人看到「答了什么」再看「怎么想的」
- *  - 字数条是负结果的可视化证据:抄过笔记的模型思考显著变短
+ *  - 结论置顶、思考默认折叠——多栏并排时,先让人看到「答了什么」再看「怎么想的」
+ *  - 字数条是长度差异的可视化证据:抄过笔记的模型思考显著变短
+ *  - 协议 v3 的卡片挂一个标记:它和同行的差异首先来自解码方式,不是权重
  *  - 思考/结论在导出侧已切分,这里不做二次解析(截断只发生在思考段) */
 export function AnswerCard({
   run, answer, maxChars,
@@ -14,7 +15,7 @@ export function AnswerCard({
     return (
       <div className="card skip">
         <div className="card-head">
-          <div className="who"><h3>{run.label}</h3></div>
+          <div className="who"><h3>{run.label}</h3>{run.protocol === 'v3' && <span className="proto-tag">协议 v3</span>}</div>
           <div className="desc">{run.desc}</div>
         </div>
         <div className="card-body"><p className="empty">该方案未作答此题</p></div>
@@ -29,6 +30,7 @@ export function AnswerCard({
       <div className="card-head">
         <div className="who">
           <h3>{run.label}</h3>
+          {run.protocol === 'v3' && <span className="proto-tag">协议 v3</span>}
           <span className={`badge ${v.tone}`}>{v.label}</span>
         </div>
         <div className="desc">{run.desc}</div>
