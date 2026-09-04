@@ -1,0 +1,108 @@
+# 第三阶段 GRPO:在弃权 SFT 模型之上,用「验证器现算的选择性预测奖励」做可验证 RL。
+# 单卡 RTX 5090(32 GB),ms-swift 4.5.2,colocate rollout(训练与 vLLM 同卡分显存)。
+# 运行:bash scripts/train_grpo.sh(不要直接 swift rlhf,脚本里有 vllm/参数名两道前置闸)
+#
+# 训练线位置:蒸馏 SFT(阶段一,output/sft_distill_v1/merged,CMExam 严格口径 80.4%)
+#             → 弃权 SFT(阶段二,教「答案:不确定」这条字面收尾)
+#             → 本配置(阶段三,教「什么时候该说不确定」)。
+# 奖励表 +1 / 0 / -1 让弃权恰在 p(答对) < 0.5 时最优,详见 src/medforge/train/grpo_reward.py 的模块注释。
+#
+# ── 每个非显然键来自哪个 dataclass(读 ms-swift 4.5.2 wheel 源码逐个核对,不是抄博客)──────────
+#   rlhf_type / beta / temperature / max_completion_length   swift/arguments/rlhf_args.py  RLHFArguments
+#   num_generations / reward_funcs / reward_weights /
+#     log_completions                                        swift/arguments/rlhf_args.py  GRPOArguments
+#   epsilon / epsilon_high / overlong_filter /
+#     num_generations_eval                                   swift/rlhf_trainers/args_mixin.py  GRPOArgumentsMixin
+#   use_vllm / vllm_mode / top_p / sleep_level /
+#     offload_model / offload_optimizer / lora_rank          swift/rlhf_trainers/args_mixin.py  RolloutTrainerArgumentsMixin
+#   vllm_gpu_memory_utilization / vllm_max_model_len         swift/rlhf_trainers/args_mixin.py  VllmArguments
+#   external_plugins / tuner_type / seed                     swift/arguments/base_args/base_args.py  BaseArguments
+#   dataset / val_dataset                                    swift/arguments/base_args/data_args.py  DataArguments
+#   model / torch_dtype                                      swift/arguments/base_args/model_args.py  ModelArguments
+#   max_length                                               swift/arguments/base_args/template_args.py  TemplateArguments
+#   target_modules / lora_alpha / lora_dropout               swift/arguments/tuner_args.py  TunerArguments
+#   learning_rate / eval_strategy / output_dir               swift/arguments/sft_args.py  SftArguments
+#   swanlab_project / swanlab_mode                           swift/arguments/sft_args.py  SwanlabArguments
+#   lr_scheduler_type / warmup_ratio / per_device_*_batch_size /
+#     gradient_accumulation_steps / gradient_checkpointing /
+#     logging_steps / report_to                              swift/trainers/arguments.py  TrainArgumentsMixin
+#   max_steps / save_steps / save_total_limit / eval_steps   transformers Seq2SeqTrainingArguments
+#                                                            (SftArguments 继承 swift.trainers.arguments.Seq2SeqTrainingArguments)
+# 注意 lora_rank 在 4.5.2 里被 RolloutTrainerArgumentsMixin 重定义(默认 8,给 vllm lora adapter 用),
+# 但它和 TunerArguments 的 LoRA rank 是同一个字段名,写一次两边都吃到——与 SFT 配置保持 64 不变。
+
+rlhf_type: grpo
+
+# 阶段三接在阶段二之上。若跳过弃权 SFT,把这里指向 output/sft_distill_v1/merged
+# (奖励表本身就能教出弃权,弃权 SFT 只是先把「答案:不确定」这个字面格式喂熟,省掉冷启动)
+model: output/sft_abstain_v1/merged
+torch_dtype: bfloat16
+
+# LoRA 与 SFT 配置同规格:换了秩就没法说「差别来自 GRPO 而不是容量」
+tuner_type: lora
+target_modules: all-linear
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+
+# RL 的学习率必须比 SFT 低一个数量级:GRPO 的梯度来自组内优势,lr 大了几十步就把 SFT 学到的格式冲掉
+learning_rate: 5.0e-6
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+gradient_checkpointing: true
+seed: 42
+
+dataset: data/processed/grpo_train.jsonl      # medforge.data.build_grpo --skip 4000 --n 6000
+val_dataset: data/processed/grpo_eval.jsonl   # 同一次 build 的 --eval-n 200,与训练段不重叠
+
+# 一次 rollout 出 8 个解:GRPO 的优势是组内标准化出来的,组太小(< 4)优势噪声压不住。
+# generation_batch_size = per_device_train_batch_size × world_size × gradient_accumulation_steps
+#   = 8 × 1 × 2 = 16 个 prompt,必须能被 num_generations 整除(args_mixin._init_generation_batch_params),
+#   16 % 8 == 0 ✓;每步实际前向 16 × 8 = 128 条 completion
+num_generations: 8
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 2
+
+# 4096:CMExam-train 的答卷在蒸馏模型下中位 ≈ 420 token、p90 ≈ 4.7k(reports/usability-v3-train.md 的
+# 「每题 token 均值 1.8k」是三卷混合值,CMExam 单卷更短)。给到 4096 覆盖住九成,再长的靠 overlong_filter
+# 排掉而不是罚分——被长度截断的答卷不该被当成「答错」记进优势,否则等于教模型写得更短而不是更准
+max_completion_length: 4096
+max_length: 8192              # prompt 侧上限,与 SFT 一致
+vllm_max_model_len: 12288     # prompt + completion 的硬上限,留出余量
+overlong_filter: true
+
+# 采样参数照抄 Qwen3.5 官方思考模式(评测 sample 臂也是这一套),训练与考卷的解码分布不能漂
+temperature: 1.0
+top_p: 0.95
+
+# beta = 0 → 不加载参考模型,单卡省下一整份 4B 权重,也不惩罚偏离 SFT 分布。
+# 代价是可能跑飞(格式退化 / 复读),所以 log_completions 开着,前 50 步要看采样样例。
+# 如果观察到格式崩坏,改 0.04(TRL/ms-swift 的常用值)重跑,别调 lr。
+beta: 0.0
+# epsilon / epsilon_high 留 ms-swift 默认(0.2 / None,即对称裁剪)——没有证据支持 DAPO 式非对称上界
+log_completions: true
+
+use_vllm: true
+vllm_mode: colocate                  # 单卡只能同居:rollout 与训练轮流占显存
+vllm_gpu_memory_utilization: 0.4     # 32 GB × 0.4 ≈ 12.8 GB 给 vLLM(4B bf16 权重 ≈ 8 GB + KV)
+sleep_level: 1                       # 训练步开始前让 vLLM 睡下、交还显存;不开单卡必 OOM
+offload_model: true                  # 同理:rollout 期间把训练权重挪到 CPU
+offload_optimizer: true
+
+max_steps: 300
+save_steps: 50
+save_total_limit: 2                  # RL 没有 load_best_model_at_end,留最近两个点够回滚了
+logging_steps: 5
+eval_strategy: steps
+eval_steps: 50
+per_device_eval_batch_size: 8        # 全局 eval batch 必须被 num_generations_eval 整除(默认 = num_generations = 8)
+output_dir: output/grpo_v1
+
+# 奖励:唯一一条,权重默认全 1,所以不写 reward_weights(写了长度必须与 reward_funcs 相等)。
+# external_plugins 的路径相对仓库根;import_external_file 会 abspath 后 insert 进 sys.path
+external_plugins: [src/medforge/train/grpo_reward.py]
+reward_funcs: [medforge_selective]
+
+report_to: swanlab
+swanlab_project: medforge
+swanlab_mode: cloud
