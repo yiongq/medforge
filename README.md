@@ -53,7 +53,8 @@ DPO 在正确尺子下是真持平;蒸馏 2.0 是项目训练线第一个正结�
 
 | 在哪 | 是什么 |
 |---|---|
-| [🤗 fang04/medforge-qwen3.5-4b-dpo](https://huggingface.co/fang04/medforge-qwen3.5-4b-dpo) | 定稿模型权重(Qwen3.5-4B + 验证器驱动 DPO) |
+| 🤗 fang04/medforge-qwen3.5-4b-distill(待上传,[模型卡](docs/model-card-distill.md)) | **二代模型**:Qwen3.5-4B + 蒸馏 2.0,CMExam 严格口径 80.4%、每题 token 1/3 |
+| [🤗 fang04/medforge-qwen3.5-4b-dpo](https://huggingface.co/fang04/medforge-qwen3.5-4b-dpo) | 一代模型:Qwen3.5-4B + 验证器驱动 DPO(v3 重评三卷与基座持平) |
 | [🤗 fang04/medforge-artifacts](https://huggingface.co/datasets/fang04/medforge-artifacts) | 自采样原始解法(10 GPU 小时)、偏好对、判卷标签缓存、四方案完整答卷 |
 | **[medforge.yiongspace.com](https://medforge.yiongspace.com)** | 在线实验台:同题四方案并排、成绩板、压测曲线、live 现场提问 |
 | `web/` | 上述站点源码(Vite + React,零运行时依赖) |
