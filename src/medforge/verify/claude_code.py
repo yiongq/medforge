@@ -7,17 +7,20 @@
 调用形态(每个参数都是必要的,别删):
     claude -p <prompt> --model <id> --output-format json --max-turns 1 \
       --tools "" --setting-sources "" --disable-slash-commands --no-session-persistence \
-      --system-prompt <system> [--json-schema <schema>] [--effort <low|medium|high|max>]
+      --system-prompt <system> [--json-schema <schema>] [--effort <low|medium|high|xhigh|max>]
   --tools "" / --setting-sources "" / --disable-slash-commands:判卷是纯文本推理,
   不给它文件系统与项目配置,免得判分口径被某个 CLAUDE.md 悄悄改写。
   --max-turns 1:一问一答,不让它自己续轮。--no-session-persistence:不落会话文件。
 
-两个必须遵守的环境约束:
+三个必须遵守的环境约束:
   1. 进程环境里必须清掉 CLAUDECODE 与所有 CLAUDE_* 变量,否则 CLI 认为自己被嵌套调用而拒绝;
-  2. cwd 必须是空目录,否则它会加载仓库的 CLAUDE.md / memory,把无关上下文塞进判卷提示词。
+  2. 同时清掉 ANTHROPIC_API_KEY / _AUTH_TOKEN / _BASE_URL:留着的话 CLI 会拿 API key 计费,
+     而这条 provider 的全部意义是「用订阅额度」——文档承诺不花 API 费,环境就不能偷偷改口;
+  3. cwd 必须是空目录,否则它会加载仓库的 CLAUDE.md / memory,把无关上下文塞进判卷提示词。
 
-已知代价与限制(实测):
-  - 每次调用有约 31k 缓存输入 token 的基线上下文,连续调用命中缓存,单次约 5 秒;
+已知代价与限制(2026-09-05 用本模块的参数实测,claude-sonnet-5):
+  - 每次调用有约 31.6k 输入 token 的基线上下文;首次调用是 cache_creation,随后连续调用
+    命中缓存(cache_read ≈ 31.6k、cache_creation = 0),单次约 5 秒。
     per-call 开销可接受,但必须限流(ThreadPool 4~8 足够),额度按 Max 的 5 小时窗口计。
   - 扩展思考的过程文本**不在** JSON 结果里,只拿得到最终答案——所以用它评测时
     存档答卷里没有 </think>,必须按 thinking=off 记账(见 medforge.eval.run)。
@@ -27,7 +30,7 @@
 政策边界:蒸馏教师**不得**换成这个 provider。Anthropic 消费者条款禁止用 Claude 输出训练
 其他模型,教师角色(medforge.data.build_distill)继续用 DeepSeek(其条款 §4.2 明确允许蒸馏)。
 
-冒烟自测(验证本机登录态):
+冒烟自测(验证本机登录态,先 `claude auth status` / `claude auth login`):
     uv run python -m medforge.verify.claude_code --model claude-sonnet-5
 """
 
@@ -35,13 +38,16 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 
 CLI = "claude"
 DEFAULT_TIMEOUT = 180.0
-EFFORTS = ("low", "medium", "high", "max")
+# 与 v2.1.252 的 `claude --help` 逐字对齐;少写一档会让合法配置在 _build_argv 里被拒
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class ClaudeCodeError(RuntimeError):
@@ -57,9 +63,23 @@ class ClaudeCodeResult:
     raw: dict = field(repr=False)  # 原始 JSON,审计用
 
 
+# 会让 CLI 改用 API key 计费的变量:这条 provider 承诺走订阅额度,所以一律不传给子进程
+_AUTH_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")
+
+
 def _clean_env() -> dict[str, str]:
-    """去掉嵌套会话标记:CLAUDECODE 没有下划线,单独判一次。"""
-    return {k: v for k, v in os.environ.items() if k != "CLAUDECODE" and not k.startswith("CLAUDE_")}
+    """去掉嵌套会话标记与 API key:CLAUDECODE 没有下划线,单独判一次。"""
+    return {
+        k: v
+        for k, v in os.environ.items()
+        if k != "CLAUDECODE" and not k.startswith("CLAUDE_") and k not in _AUTH_VARS
+    }
+
+
+def cli_available() -> bool:
+    """`claude` 在不在 PATH 上:给调用方做开跑前体检——CLI 找不到时每一条都会失败,
+    而判卷侧的契约是「失败即弃权」,弃权计错,整卷会无声塌下去。"""
+    return shutil.which(CLI) is not None
 
 
 def _build_argv(
@@ -92,14 +112,27 @@ def claude_code_query(
     effort: str | None = None,
     timeout: float = DEFAULT_TIMEOUT,
     cwd: str | None = None,
+    retries: int = 0,
 ) -> ClaudeCodeResult:
     """同步问一次 Claude Code,失败一律抛 ClaudeCodeError(调用方决定是弃权还是重试)。
 
     cwd 不给就临时开一个空目录:必须避开项目的 CLAUDE.md/memory(见模块 docstring)。
+    retries>0 时对 ClaudeCodeError 重试(短退避):OpenAI SDK 那条路有 max_retries=2 兜底,
+    CLI 这条路一次抖动(额度窗口、spawn 失败)就是一条硬失败,整臂失败率一超阈值就不出表。
+    配置类错误(effort 非法)在 _build_argv 里先抛 ValueError,不进重试。
     """
     argv = _build_argv(
         prompt, model=model, system_prompt=system_prompt, json_schema=json_schema, effort=effort
     )
+    for attempt in range(retries):
+        try:
+            return _run_once(argv, timeout=timeout, cwd=cwd)
+        except ClaudeCodeError:
+            time.sleep(min(2.0 * (attempt + 1), 10.0))
+    return _run_once(argv, timeout=timeout, cwd=cwd)
+
+
+def _run_once(argv: list[str], *, timeout: float, cwd: str | None) -> ClaudeCodeResult:
     env = _clean_env()
     with tempfile.TemporaryDirectory(prefix="medforge-cc-") as tmp:
         try:
@@ -152,7 +185,7 @@ def parse_json_object(text: str) -> dict | None:
 
 
 def main() -> None:
-    """--smoke:打一次最小请求,把解析结果与用量打出来,用来验证本机 `claude login` 是否可用。"""
+    """--smoke:打一次最小请求,把解析结果与用量打出来,用来验证本机 `claude auth login` 的登录态是否可用。"""
     import argparse
 
     ap = argparse.ArgumentParser(description="Claude Code provider 冒烟自测")

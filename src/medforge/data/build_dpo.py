@@ -11,6 +11,11 @@
 不符的默认交 LLM 仲裁(约 2-3 解/题 × 8K 题 ≈ 2 万次调用 ≈ 20-40 元,防同义答案
 被误杀成负例;--no-llm-arbitrate 可关,转为严格判错);无声明的解丢弃。
 
+仲裁员不能用 claude-code:这一步的产物是训练教材,LLM 仲裁正是决定哪条解成为 chosen/
+哪条成为 rejected 的那只手——偏好标签直接构造训练数据,不算「测量」。Anthropic 消费者条款
+禁止用 Claude 输出训练其他模型,所以这里显式拒绝 MEDFORGE_JUDGE_PROVIDER=claude-code
+(评测判卷与代理标注不受限,见 docs/claude-code-provider.md)。
+
 输出 ms-swift DPO 格式:{"messages": [user, assistant(chosen)], "rejected_response": "..."}
 (字段名已核实=官方 Custom-dataset 文档 DPO 示例原文,swift.readthedocs.io/en/latest/Customization/Custom-dataset.html)
 """
@@ -136,9 +141,15 @@ def main() -> None:
         from medforge.env import load_env
 
         load_env()
-        from medforge.verify.verifier import missing_judge_env
+        from medforge.verify.verifier import judge_provider, missing_judge_env
 
-        missing = missing_judge_env()  # 按 MEDFORGE_JUDGE_PROVIDER 变:claude-code 只需要 _MODEL
+        if judge_provider() == "claude-code":
+            # 政策线:偏好对是训练数据,仲裁标签直接决定 chosen/rejected;Claude 的输出不能进这一步
+            rprint("[red]✗ DPO 偏好对是训练数据,仲裁员不能用 claude-code"
+                   "(Anthropic 条款禁止用 Claude 输出训练其他模型);"
+                   "把 MEDFORGE_JUDGE_PROVIDER 切回 openai,或显式 --no-llm-arbitrate[/]")
+            sys.exit(2)
+        missing = missing_judge_env()  # 按 MEDFORGE_JUDGE_PROVIDER 变:openai 要三个变量
         if missing:
             rprint(f"[red]✗ LLM 仲裁已启用但 judge 未配置: {missing};配好 .env 或显式 --no-llm-arbitrate[/]")
             sys.exit(2)

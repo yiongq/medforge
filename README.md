@@ -108,16 +108,18 @@ uv run python -m medforge.data.download         # 拉取数据集(国内可加 H
 | --- | --- |
 | `MEDFORGE_JUDGE_PROVIDER` | `openai`(默认)/ `claude-code` |
 | `MEDFORGE_JUDGE_BASE_URL` / `_API_KEY` | 仅 `openai` 需要;任何 OpenAI 兼容端点 |
-| `MEDFORGE_JUDGE_MODEL` | 两者都要;claude-code 下写全名(`claude-opus-5`) |
-| `MEDFORGE_JUDGE_EFFORT` | 可选,claude-code 的扩展思考档位 `low\|medium\|high\|max` |
+| `MEDFORGE_JUDGE_MODEL` | 两者都要;claude-code 下写全名(如 `claude-sonnet-5`),且必须与代理标注模型不同 |
+| `MEDFORGE_JUDGE_EFFORT` | 可选,claude-code 的扩展思考档位 `low\|medium\|high\|xhigh\|max` |
 
-`claude-code` 走本机已登录的 Claude Code CLI(`claude login`,用订阅额度,不需要 API key),
+`claude-code` 走本机已登录的 Claude Code CLI(`claude auth login`,用订阅额度,不需要 API key;
+子进程环境会清掉 `ANTHROPIC_API_KEY` 等变量,免得悄悄改走按量计费),
 评测臂另有 `--provider claude-code --effort high`;代价、口径妥协与验证方式见
 [docs/claude-code-provider.md](docs/claude-code-provider.md)(先跑
 `uv run python -m medforge.verify.claude_code --model claude-sonnet-5` 冒烟)。
 
-> 蒸馏教师不走这条路:Anthropic 消费者条款禁止用 Claude 输出训练其他模型,`data/build_distill.py`
-> 的教师角色继续用 DeepSeek(其条款 §4.2 允许蒸馏)。判卷/标注/评测是测量,不是训练。
+> 蒸馏教师与 DPO 仲裁不走这条路:Anthropic 消费者条款禁止用 Claude 输出训练其他模型,
+> `data/build_distill.py` 的教师、`data/build_dpo.py` 的偏好对仲裁继续用 DeepSeek(其条款 §4.2 允许蒸馏)。
+> 判卷/标注/评测是测量,可以用 Claude;凡是直接产出训练教材的一步都不行。
 
 ## 路线图
 

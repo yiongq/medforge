@@ -205,7 +205,7 @@ def label_proxy(
     provider=None 时取 MEDFORGE_JUDGE_PROVIDER(再默认 openai)。落盘字段与后端无关。
     """
     from medforge.env import load_env
-    from medforge.verify.claude_code import claude_code_query, parse_json_object
+    from medforge.verify.claude_code import EFFORTS, claude_code_query, parse_json_object
     from medforge.verify.verifier import judge_provider, split_answer
 
     load_env()
@@ -219,6 +219,9 @@ def label_proxy(
     if provider == "claude-code":
         # 扩展思考默认拉满档:代理标注是「更强的第二意见」,省这点思考预算没意义
         effort = effort or "high"
+        if effort not in EFFORTS:
+            rprint(f"[red]--effort 只能是 {'|'.join(EFFORTS)},收到 {effort!r}[/]")
+            sys.exit(2)
 
         def ask(prompt: str) -> dict:
             r = claude_code_query(
@@ -289,7 +292,16 @@ def main() -> None:
     if "--from-runs" in argv:
         sample_from_runs(opt("--from-runs", "").split(","), int(opt("--n", "150")), Path(opt("--out", str(MCQ_OUT))))
     elif "--label-proxy" in argv:
-        provider = opt("--provider", "") or None
+        from medforge.env import load_env
+        from medforge.verify.verifier import JUDGE_PROVIDERS, judge_provider
+
+        # 后端必须先定下来再挑默认模型:它也可能来自 .env 的 MEDFORGE_JUDGE_PROVIDER,
+        # 只看命令行 flag 会在 env 切到 claude-code 时拿 deepseek-v4-pro 去调 CLI,整轮标注白跑
+        load_env()
+        provider = opt("--provider", "") or judge_provider()
+        if provider not in JUDGE_PROVIDERS:
+            rprint(f"[red]--provider 只能是 {'|'.join(JUDGE_PROVIDERS)},收到 {provider!r}[/]")
+            sys.exit(2)
         # 换后端就换默认模型:claude-code 上 deepseek-v4-pro 这个名字根本不存在
         default_model = "claude-opus-5" if provider == "claude-code" else "deepseek-v4-pro"
         label_proxy(

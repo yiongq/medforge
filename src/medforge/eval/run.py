@@ -77,7 +77,8 @@ FORCE_MAX_TOKENS = 32
 MODES = ("plain", "budget-forcing")
 # 生成后端:openai = 任何 OpenAI 兼容端点(vLLM / DeepSeek / ...);claude-code = 本机已登录的 Claude Code CLI
 PROVIDERS = ("openai", "claude-code")
-EFFORTS = ("low", "medium", "high", "max")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")  # 与 `claude --help` 对齐
+CC_MAX_CONCURRENCY = 8  # claude-code 每条请求是一个 CLI 进程:再高只是排队并更快撞订阅额度窗口
 
 # 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径。
 # provider/effort 必须进指纹:同一个模型名经 CLI 与经 API 拿到的作答不是一回事(采样参数不同、思考预算不同),
@@ -86,6 +87,9 @@ PROTOCOL_KEYS = (
     "model", "provider", "effort", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty",
     "seed", "prompt", "prompt_sha", "mode", "extra_body", "samples", "limit", "thinking", "llm_judge",
 )
+# 本次新增的键在老 run_meta.json 里根本不存在,"缺失" 必须读作「当年只有 openai 一条路」,
+# 否则 18 个存量目录会在续跑时被判成协议不一致(报错还建议删目录=毁存档)
+PROTOCOL_LEGACY_DEFAULTS = {"provider": "openai", "effort": None}
 
 
 def prompt_sha(variant: str) -> str:
@@ -188,7 +192,11 @@ def _gen_outputs(
 
         def gen_one_cc(s: Sample) -> dict:
             # system_prompt 留空:提示词必须与其他臂逐字相同(prompt_sha 一致),不许偷偷加系统指令
-            r = claude_code_query(render(s), model=model, system_prompt="", effort=effort, timeout=timeout)
+            # retries:CLI 这条路没有 SDK 的 max_retries,一次抖动就是一条硬失败,
+            # 而 _drain 的失败率一过 MAX_FAIL_RATE 就整臂不出表
+            r = claude_code_query(
+                render(s), model=model, system_prompt="", effort=effort, timeout=timeout, retries=2
+            )
             return {
                 "id": s.id,
                 "output": r.text,
@@ -333,9 +341,17 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
     stamp = {"git": meta.get("git"), "created": meta.get("created")}
     if meta_file.exists():
         old = json.loads(meta_file.read_text(encoding="utf-8"))
-        diff = {k: (old.get(k), meta.get(k)) for k in PROTOCOL_KEYS if old.get(k) != meta.get(k)}
+
+        def val(d: dict, k: str):
+            # 只在「键不存在」时补默认:真记了 provider=null 的目录仍然算不一致。
+            # 两侧都补,新老 meta 才是同一把尺子(旧目录 + 老口径调用方都读作 openai)
+            return d.get(k, PROTOCOL_LEGACY_DEFAULTS.get(k))
+
+        diff = {k: (val(old, k), val(meta, k)) for k in PROTOCOL_KEYS if val(old, k) != val(meta, k)}
         if diff:
             raise SystemExit(f"✗ {out_dir.name} 已按另一套协议落过盘 {diff};换 --run-name 或删掉目录")
+        for k, v in PROTOCOL_LEGACY_DEFAULTS.items():
+            old.setdefault(k, v)  # 顺手补写,老目录只补这一次
         old.setdefault("history", []).append(stamp)
         meta_file.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
         return
@@ -449,6 +465,10 @@ def main() -> None:
             rprint("[red]✗ claude-code 不走端点,--endpoint 会让协议指纹说谎;去掉它[/]")
             sys.exit(2)
         gen["effort"] = gen["effort"] or "high"
+        if args.concurrency > CC_MAX_CONCURRENCY:
+            rprint(f"[yellow]! claude-code 每条请求是一个 CLI 进程,并发 >{CC_MAX_CONCURRENCY} 只会排队"
+                   f"并更快撞额度窗口,已降到 {CC_MAX_CONCURRENCY}[/]")
+            args.concurrency = CC_MAX_CONCURRENCY
         # CLI 不暴露采样旋钮与 max_tokens:记 null 而不是记一个没发出去的数字——指纹不许说谎
         gen.update(dict.fromkeys(("temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed")))
         max_tokens = None

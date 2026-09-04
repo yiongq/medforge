@@ -127,18 +127,33 @@ def judge_provider() -> str:
     return p if p in JUDGE_PROVIDERS else "openai"
 
 
+def judge_effort() -> str | None:
+    """扩展思考档位,归一成小写;非法值不在这里兜底(会被 missing_judge_env 在开跑前拦下),
+    因为「悄悄降到默认档」等于指纹说谎。"""
+    return (os.environ.get("MEDFORGE_JUDGE_EFFORT") or "").strip().lower() or None
+
+
 def missing_judge_env() -> list[str]:
-    """按当前 provider 返回缺失的必配环境变量,给调用方做 fail-fast。
+    """按当前 provider 返回「开跑前就该拦下」的问题清单(缺失变量名或一句人话),空 = 可以跑。
 
     judge 没配时 verify_by_llm 只会静默弃权,而弃权计错——整卷分数会无声塌一半,
-    所以 eval/DPO 入口宁可开跑前就退出。claude-code 不需要 base_url/api_key,只要模型名。
+    所以 eval/DPO 入口宁可开跑前就退出。claude-code 不需要 base_url/api_key,只要模型名;
+    但它还有两件同样会「每条都失败 → 全卷弃权」的事必须一起体检:CLI 不在 PATH、effort 写错。
+    这两件在运行时都被 _judge_by_claude_code 的 except 吞成弃权,不在这里拦就没人拦了。
     """
-    keys = (
-        ("MEDFORGE_JUDGE_MODEL",)
-        if judge_provider() == "claude-code"
-        else ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
-    )
-    return [k for k in keys if not os.environ.get(k)]
+    if judge_provider() != "claude-code":
+        keys = ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
+        return [k for k in keys if not os.environ.get(k)]
+
+    from medforge.verify import claude_code as cc
+
+    problems = [k for k in ("MEDFORGE_JUDGE_MODEL",) if not os.environ.get(k)]
+    if not cc.cli_available():
+        problems.append(f"`{cc.CLI}` 不在 PATH(claude-code 后端要本机 CLI:先 `claude auth login`)")
+    effort = judge_effort()
+    if effort and effort not in cc.EFFORTS:
+        problems.append(f"MEDFORGE_JUDGE_EFFORT={effort!r} 非法(只能是 {'|'.join(cc.EFFORTS)})")
+    return problems
 
 
 def _verdict_from_judge(data: dict) -> Verdict:
@@ -155,10 +170,11 @@ def _judge_by_claude_code(prompt: str) -> Verdict:
     model = os.environ.get("MEDFORGE_JUDGE_MODEL")
     if not model:
         return Verdict(None, "abstain", "judge 未配置(claude-code 需要 MEDFORGE_JUDGE_MODEL)")
-    effort = (os.environ.get("MEDFORGE_JUDGE_EFFORT") or "").strip() or None
+    effort = judge_effort()
     try:
         r = claude_code_query(
-            prompt, model=model, system_prompt=_JUDGE_SYSTEM, json_schema=JUDGE_SCHEMA, effort=effort, timeout=180
+            prompt, model=model, system_prompt=_JUDGE_SYSTEM, json_schema=JUDGE_SCHEMA,
+            effort=effort, timeout=180, retries=1,  # 一次抖动就弃权太贵:弃权按错算
         )
     except Exception as e:  # noqa: BLE001  CLI 挂了/超时/effort 写错:弃权而不是炸掉整卷
         return Verdict(None, "llm", f"judge 调用失败: {type(e).__name__}: {str(e)[:120]}")

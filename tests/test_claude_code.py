@@ -89,6 +89,43 @@ class TestQuery:
         assert "CLAUDECODE" not in env and not [k for k in env if k.startswith("CLAUDE_")]
         assert env["PATH_KEEPER"] == "keep-me"  # 只摘嵌套标记,别把整份环境清空
 
+    def test_env_drops_api_key_so_subscription_is_used(self, monkeypatch):
+        """这条 provider 的卖点是「用订阅额度、不花 API 费」;留着 ANTHROPIC_API_KEY 会让 CLI 改走按量计费,
+        文档就和实际计费口径打架了。"""
+        for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"):
+            monkeypatch.setenv(k, "x")
+        calls = fake_cli(monkeypatch, SUCCESS)
+        cc.claude_code_query("q", model="claude-opus-5")
+        assert not [k for k in calls[0]["env"] if k.startswith("ANTHROPIC_")]
+
+    def test_retries_only_on_cli_error(self, monkeypatch):
+        """CLI 这条路没有 SDK 的 max_retries:一次抖动就是一条硬失败,失败率过阈值整臂不出表。"""
+        monkeypatch.setattr(cc.time, "sleep", lambda _s: None)
+        n = {"i": 0}
+
+        def flaky(argv, **kw):
+            n["i"] += 1
+            ok = n["i"] > 2
+            return subprocess.CompletedProcess(
+                argv, 0 if ok else 1, stdout=json.dumps(SUCCESS) if ok else "", stderr="503"
+            )
+
+        monkeypatch.setattr(cc.subprocess, "run", flaky)
+        assert cc.claude_code_query("q", model="claude-opus-5", retries=2).output_tokens == 345
+        assert n["i"] == 3
+        # 配置类错误不该被重试掉:非法 effort 在 spawn 之前就抛 ValueError
+        n["i"] = 0
+        with pytest.raises(ValueError):
+            cc.claude_code_query("q", model="claude-opus-5", effort="ultra", retries=2)
+        assert n["i"] == 0
+
+    def test_retries_exhausted_still_raises(self, monkeypatch):
+        monkeypatch.setattr(cc.time, "sleep", lambda _s: None)
+        calls = fake_cli(monkeypatch, "", returncode=1, stderr="not logged in")
+        with pytest.raises(cc.ClaudeCodeError):
+            cc.claude_code_query("q", model="claude-opus-5", retries=2)
+        assert len(calls) == 3
+
     def test_runs_in_empty_scratch_dir(self, monkeypatch, tmp_path):
         calls = fake_cli(monkeypatch, SUCCESS)
         cc.claude_code_query("q", model="claude-opus-5")
@@ -128,6 +165,12 @@ class TestQuery:
             cc.claude_code_query("q", model="claude-opus-5", effort="ultra")
         assert calls == []
 
+    def test_xhigh_is_a_legal_effort(self, monkeypatch):
+        # v2.1.252 的 `claude --help`:low, medium, high, xhigh, max
+        calls = fake_cli(monkeypatch, SUCCESS)
+        cc.claude_code_query("q", model="claude-opus-5", effort="xhigh")
+        assert calls[0]["argv"][-2:] == ["--effort", "xhigh"]
+
 
 class TestParseJsonObject:
     def test_scrapes_object_from_prose(self):
@@ -163,15 +206,44 @@ class TestVerifyByLlmProvider:
 
     def test_missing_judge_env_depends_on_provider(self, monkeypatch):
         monkeypatch.setattr("medforge.env.load_env", lambda: None)
+        monkeypatch.setattr(cc, "cli_available", lambda: True)  # 别让本机装没装 CLI 决定测试结果
         from medforge.verify.verifier import missing_judge_env
 
         monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "claude-code")
         monkeypatch.setenv("MEDFORGE_JUDGE_MODEL", "claude-opus-5")
+        monkeypatch.delenv("MEDFORGE_JUDGE_EFFORT", raising=False)
         monkeypatch.delenv("MEDFORGE_JUDGE_BASE_URL", raising=False)
         monkeypatch.delenv("MEDFORGE_JUDGE_API_KEY", raising=False)
         assert missing_judge_env() == []  # claude-code 不需要 base_url/api_key
         monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "openai")
         assert missing_judge_env() == ["MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY"]
+
+    def test_preflight_catches_unusable_claude_backend(self, monkeypatch):
+        """CLI 不在 PATH / effort 写错都会让每一条判卷失败退化成弃权,而弃权计错——
+        整卷分数无声塌一半,正是 missing_judge_env 这道 fail-fast 要挡的事。"""
+        monkeypatch.setattr("medforge.env.load_env", lambda: None)
+        from medforge.verify.verifier import missing_judge_env
+
+        monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "claude-code")
+        monkeypatch.setenv("MEDFORGE_JUDGE_MODEL", "claude-opus-5")
+        monkeypatch.delenv("MEDFORGE_JUDGE_EFFORT", raising=False)
+        monkeypatch.setattr(cc, "cli_available", lambda: False)
+        assert any("PATH" in p for p in missing_judge_env())
+
+        monkeypatch.setattr(cc, "cli_available", lambda: True)
+        monkeypatch.setenv("MEDFORGE_JUDGE_EFFORT", "highest")
+        assert any("MEDFORGE_JUDGE_EFFORT" in p for p in missing_judge_env())
+        monkeypatch.setenv("MEDFORGE_JUDGE_EFFORT", "xhigh")
+        assert missing_judge_env() == []
+
+    def test_judge_effort_is_case_insensitive(self, monkeypatch):
+        # .env 里写成 High 不该让整卷弃权:归一成小写,非法值交给上面的 fail-fast
+        from medforge.verify.verifier import judge_effort
+
+        monkeypatch.setenv("MEDFORGE_JUDGE_EFFORT", " High ")
+        assert judge_effort() == "high"
+        monkeypatch.delenv("MEDFORGE_JUDGE_EFFORT")
+        assert judge_effort() is None
 
     def test_structured_output_becomes_verdict(self, monkeypatch):
         self._use_claude_code(monkeypatch)
@@ -252,3 +324,53 @@ class TestVerifyByLlmProvider:
 
         v = verify_by_llm(_sample(), "最终答案:阿司匹林钠")
         assert v.correct is None and v.method == "abstain" and calls == []
+
+
+class TestProxyLabelingProvider:
+    """代理标注的后端可以来自 .env(MEDFORGE_JUDGE_PROVIDER),默认模型必须跟着它走。"""
+
+    def _run_cli(self, monkeypatch, tmp_path, extra_argv: list[str]) -> dict:
+        import sys
+
+        from medforge.verify import sample_calibration as sc
+
+        seen: dict = {}
+        monkeypatch.setattr(sc, "label_proxy", lambda path, model, **kw: seen.update(model=model, **kw))
+        monkeypatch.setattr("medforge.env.load_env", lambda: None)
+        f = tmp_path / "pending.jsonl"
+        f.write_text("", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["sc", "--label-proxy", "--file", str(f), *extra_argv])
+        sc.main()
+        return seen
+
+    def test_env_provider_picks_claude_default_model(self, monkeypatch, tmp_path):
+        # 老写法只看命令行 flag:.env 切到 claude-code 时会拿 deepseek-v4-pro 去调 CLI,一整轮标注白跑
+        monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "claude-code")
+        seen = self._run_cli(monkeypatch, tmp_path, [])
+        assert (seen["provider"], seen["model"]) == ("claude-code", "claude-opus-5")
+
+    def test_default_stays_deepseek_on_openai(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "openai")
+        seen = self._run_cli(monkeypatch, tmp_path, [])
+        assert (seen["provider"], seen["model"]) == ("openai", "deepseek-v4-pro")
+
+    def test_unknown_provider_rejected(self, monkeypatch, tmp_path):
+        with pytest.raises(SystemExit) as e:
+            self._run_cli(monkeypatch, tmp_path, ["--provider", "gemini-cli"])
+        assert e.value.code == 2
+
+
+def test_build_dpo_refuses_claude_code_judge(monkeypatch):
+    """偏好对是训练教材,仲裁标签直接决定 chosen/rejected——Anthropic 条款禁止用 Claude 输出训练其他模型,
+    所以这一步只能用 DeepSeek(评测判卷、代理标注不受限)。"""
+    import sys
+
+    from medforge.data import build_dpo
+
+    monkeypatch.setattr("medforge.env.load_env", lambda: None)
+    monkeypatch.setenv("MEDFORGE_JUDGE_PROVIDER", "claude-code")
+    monkeypatch.setenv("MEDFORGE_JUDGE_MODEL", "claude-opus-5")
+    monkeypatch.setattr(sys, "argv", ["build_dpo", "--endpoint", "http://x/v1", "--model", "m"])
+    with pytest.raises(SystemExit) as e:
+        build_dpo.main()
+    assert e.value.code == 2
