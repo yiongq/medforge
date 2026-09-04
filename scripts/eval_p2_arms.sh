@@ -10,22 +10,33 @@
 # 用法(GPU 机,bootstrap 已跑完,.env 已放好):
 #   bash scripts/eval_p2_arms.sh [模型名] [臂列表,逗号分隔]
 #   bash scripts/eval_p2_arms.sh Qwen/Qwen3.5-4B smoke          # 只冒烟
+#   RUN_PREFIX=dpo bash scripts/eval_p2_arms.sh fang04/medforge-qwen3.5-4b-dpo sample,forcing   # 训练臂在 v3 下重评
+#   SEED=43 bash scripts/eval_p2_arms.sh Qwen/Qwen3.5-4B sample  # 多 seed:run 名带 -s43
+# 模型名以 Qwen/ 开头走 ModelScope,其它含 "/" 的按 HF 仓库走(hf-mirror),不含 "/" 的当本地路径。
 set -euo pipefail
 MODEL="${1:-Qwen/Qwen3.5-4B}"
 ARMS="${2:-greedy,sample,forcing,abstain,greedy32k}"
 PORT="${PORT:-8000}"
+RUN_PREFIX="${RUN_PREFIX:-base}"        # run 目录名前缀:base-v3-sample / dpo-v3-sample
+SEED="${SEED:-42}"
+SEED_SUFFIX=""; [ "$SEED" != "42" ] && SEED_SUFFIX="-s$SEED"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
 export PATH="$HOME/.local/bin:$PATH"
 unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
 mkdir -p logs
 
 # vllm 默认走 HF Hub 拉模型,不认 ModelScope 缓存:先解析成本地路径(snapshot_download 幂等)
-MODEL_PATH=$(uv run python -c "from modelscope import snapshot_download; print(snapshot_download('$MODEL'))")
+case "$MODEL" in
+  Qwen/*) MODEL_PATH=$(uv run python -c "from modelscope import snapshot_download; print(snapshot_download('$MODEL'))") ;;
+  */*)    export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+          MODEL_PATH=$(uv run python -c "from huggingface_hub import snapshot_download; print(snapshot_download('$MODEL'))") ;;
+  *)      MODEL_PATH="$MODEL" ;;   # 本地路径(如 output/sft_rft_v1/merged)
+esac
 if ! curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null; then
   echo "== 起 vLLM($MODEL_PATH)=="
   # 双重脱离:ssh 会话断了服务也不断。max-model-len 要装下 prompt + 32768 输出(MedXpertQA 题面可达 1k token)。
   # 不挂 reasoning parser:守卫靠 content 里的 </think> 判收尾,挂了 parser 思考会被剥进 reasoning_content
-  (setsid nohup uv run vllm serve "$MODEL_PATH" --served-model-name base --port "$PORT" \
+  (setsid nohup uv run vllm serve "$MODEL_PATH" --served-model-name "$RUN_PREFIX" --port "$PORT" \
      --max-model-len 36864 --gpu-memory-utilization 0.92 > logs/vllm.log 2>&1 < /dev/null &)
   for _ in $(seq 1 240); do curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null && break; sleep 5; done
   curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null || { echo "vLLM 20 分钟未就绪"; tail -30 logs/vllm.log; exit 1; }
@@ -33,7 +44,7 @@ if ! curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null; then
 fi
 
 # 抽样卷与 v2 完全一致(同 seed 同 k 才是同一批题,k 改了就不是前缀),三卷都能与存档逐题配对
-E="--endpoint http://127.0.0.1:$PORT/v1 --model base --sets cmexam,cmb-val,medxpertqa --samples cmexam=2000,medxpertqa=1000 --concurrency 32"
+E="--endpoint http://127.0.0.1:$PORT/v1 --model $RUN_PREFIX --sets cmexam,cmb-val,medxpertqa --samples cmexam=2000,medxpertqa=1000 --concurrency 32"
 
 run() {  # $1 = run-name, 其余透传给 medforge.eval.run
   local name="$1"; shift
@@ -42,11 +53,13 @@ run() {  # $1 = run-name, 其余透传给 medforge.eval.run
   grep -v "^\[normalize\]" "logs/$name.log" | tail -6
 }
 
+# 评测 CLI 默认已是 v3 采样,贪心类臂必须显式传 temperature 0 等参数,漏了会静默变成采样
+G="--temperature 0 --top-p 1 --top-k -1 --presence-penalty 0"
 for arm in ${ARMS//,/ }; do
   case "$arm" in
     smoke)
-      uv run python -m medforge.eval.run --endpoint "http://127.0.0.1:$PORT/v1" --model base \
-        --run-name smoke --sets cmexam --limit 3 --no-llm-judge --max-tokens 2048 > logs/smoke.log 2>&1 || { tail -20 logs/smoke.log; exit 1; }
+      uv run python -m medforge.eval.run --endpoint "http://127.0.0.1:$PORT/v1" --model "$RUN_PREFIX" \
+        --run-name smoke --sets cmexam --limit 3 --no-llm-judge --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0 > logs/smoke.log 2>&1 || { tail -20 logs/smoke.log; exit 1; }
       grep -v "^\[normalize\]" logs/smoke.log | tail -4
       # 关键检查:答卷里必须有 </think>。若新版 vLLM 自动挂了 reasoning parser,思考会被剥进
       # reasoning_content,content 里没有 </think>,整个严格口径就废了(租卡笔记记过这个坑)
@@ -58,12 +71,12 @@ for r in rows:
 assert all("</think>" in r["output"] or r["finish_reason"] == "length" for r in rows), "content 里没有 </think>:检查 vLLM 是否挂了 reasoning parser"
 PY
       ;;
-    greedy)    run base-v3-greedy    --max-tokens 8192 ;;
-    greedy32k) run base-v3-greedy32k --max-tokens 32768 --timeout 3600 ;;   # 复读跑满 32k 要十来分钟
-    sample)    run base-v3-sample    --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 1.5 --max-tokens 32768 --seed 42 ;;
-    forcing)   run base-v3-forcing   --max-tokens 8192 --mode budget-forcing ;;
-    abstain)   run base-v3-abstain   --max-tokens 8192 --prompt abstain ;;
+    greedy)    run "$RUN_PREFIX-v3-greedy"    --max-tokens 8192 $G ;;
+    greedy32k) run "$RUN_PREFIX-v3-greedy32k" --max-tokens 32768 $G --timeout 3600 ;;   # 复读跑满 32k 要十来分钟
+    sample)    run "$RUN_PREFIX-v3-sample$SEED_SUFFIX" --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 1.5 --max-tokens 32768 --seed "$SEED" ;;
+    forcing)   run "$RUN_PREFIX-v3-forcing"   --max-tokens 8192 $G --mode budget-forcing ;;
+    abstain)   run "$RUN_PREFIX-v3-abstain"   --max-tokens 8192 $G --prompt abstain ;;
     *) echo "未知臂: $arm"; exit 2 ;;
   esac
 done
-echo "✓ 完成:reports/runs/base-v3-*/summary.md;别忘了 git add scored/summary/run_meta 并在控制台关机"
+echo "✓ 完成:reports/runs/$RUN_PREFIX-v3-*/summary.md;把小文件 rsync 回本地后关机(实例内执行 shutdown)"
