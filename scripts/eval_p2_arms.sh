@@ -64,13 +64,14 @@ for arm in ${ARMS//,/ }; do
   case "$arm" in
     smoke)
       uv run python -m medforge.eval.run --endpoint "http://127.0.0.1:$PORT/v1" --model "$RUN_PREFIX" \
-        --run-name smoke --sets cmexam --limit 3 --no-llm-judge --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0 > logs/smoke.log 2>&1 || { tail -20 logs/smoke.log; exit 1; }
+        --run-name "smoke-$RUN_PREFIX" --sets cmexam --limit 3 --no-llm-judge --max-tokens 2048 --temperature 0 --top-p 1 --top-k -1 --presence-penalty 0 > logs/smoke.log 2>&1 || { tail -20 logs/smoke.log; exit 1; }
       grep -v "^\[normalize\]" logs/smoke.log | tail -4
       # 关键检查:答卷里必须有 </think>。若新版 vLLM 自动挂了 reasoning parser,思考会被剥进
       # reasoning_content,content 里没有 </think>,整个严格口径就废了(租卡笔记记过这个坑)
-      uv run python - <<'PY'
+      RUN_PREFIX="$RUN_PREFIX" uv run python - <<'PY'
 import json
-rows = [json.loads(l) for l in open("reports/runs/smoke/cmexam.outputs.jsonl")]
+import os
+rows = [json.loads(l) for l in open(f"reports/runs/smoke-{os.environ['RUN_PREFIX']}/cmexam.outputs.jsonl")]
 for r in rows:
     print(f"  {r['id']} finish={r['finish_reason']} tokens={r['completion_tokens']} has</think>={'</think>' in r['output']} head={r['output'][:60]!r}")
 assert all("</think>" in r["output"] or r["finish_reason"] == "length" for r in rows), "content 里没有 </think>:检查 vLLM 是否挂了 reasoning parser"
