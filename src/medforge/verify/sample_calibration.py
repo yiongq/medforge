@@ -19,6 +19,14 @@
     uv run python -m medforge.verify.sample_calibration --from-runs base-v2,sft-v2,dpo-v2,base-v3-sample --n 150
     # ④ 用另一个更强的模型做代理标注(proxy_correct),人工再抽检;calibrate 用 --label-field 选标签列
     uv run python -m medforge.verify.sample_calibration --label-proxy --file data/calibration/pending-mcq.jsonl
+    # ④' 同上,但用本机已登录的 Claude 订阅(不花 API 费,额度按 Max 的 5 小时窗口算)
+    uv run python -m medforge.verify.sample_calibration --label-proxy --provider claude-code \
+      --model claude-opus-5 --concurrency 4
+
+后端由 --provider 选(默认取 MEDFORGE_JUDGE_PROVIDER,再默认 openai):
+  openai      需要 MEDFORGE_JUDGE_BASE_URL / _API_KEY,模型默认 deepseek-v4-pro,思考模式走 extra_body;
+  claude-code 只需要本机 `claude` 已登录,模型写全名(claude-opus-5),扩展思考用 --effort(默认 high)。
+标注结果的字段不随后端变(proxy_correct / proxy_chosen / proxy_reason),calibrate.py 那侧无感。
 """
 
 from __future__ import annotations
@@ -59,6 +67,17 @@ _PROXY_PROMPT = """你是严格的医学考试判卷员。下面是一道选择�
 {answer}
 
 只输出 JSON:{{"chosen": "字母或 null", "correct": true/false/null, "reason": "一句话"}}"""
+_PROXY_SYSTEM = "你是严格的医学考试判卷员,只输出 JSON,不要输出任何其他文字。"
+# claude-code 后端用结构化输出;字段与提示词逐字对齐,openai 后端仍靠正则刮 JSON
+PROXY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chosen": {"type": ["string", "null"]},
+        "correct": {"type": ["boolean", "null"]},
+        "reason": {"type": "string"},
+    },
+    "required": ["chosen", "correct", "reason"],
+}
 
 
 def sample() -> None:
@@ -178,29 +197,57 @@ def sample_from_runs(runs: list[str], n: int, out: Path = MCQ_OUT, seed: int = S
     return len(picked)
 
 
-def label_proxy(path: Path, model: str, concurrency: int = 8) -> None:
-    """用另一个更强的模型代理标注 proxy_correct(仍需人工抽检);中断重跑只补空缺。"""
+def label_proxy(
+    path: Path, model: str, concurrency: int = 8, provider: str | None = None, effort: str | None = None,
+) -> None:
+    """用另一个更强的模型代理标注 proxy_correct(仍需人工抽检);中断重跑只补空缺。
+
+    provider=None 时取 MEDFORGE_JUDGE_PROVIDER(再默认 openai)。落盘字段与后端无关。
+    """
     from medforge.env import load_env
-    from medforge.verify.verifier import split_answer
+    from medforge.verify.claude_code import claude_code_query, parse_json_object
+    from medforge.verify.verifier import judge_provider, split_answer
 
     load_env()
-    base_url, api_key = os.environ.get("MEDFORGE_JUDGE_BASE_URL"), os.environ.get("MEDFORGE_JUDGE_API_KEY")
-    if not (base_url and api_key):
-        rprint("[red]需配置 MEDFORGE_JUDGE_BASE_URL / _API_KEY[/]")
-        sys.exit(2)
+    provider = provider or judge_provider()
     if model == os.environ.get("MEDFORGE_JUDGE_MODEL"):
         rprint(f"[red]代理标注模型不能与判卷模型相同({model}):那量的是它和自己的一致率[/]")
         sys.exit(2)
-    import re
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from openai import OpenAI
+    if provider == "claude-code":
+        # 扩展思考默认拉满档:代理标注是「更强的第二意见」,省这点思考预算没意义
+        effort = effort or "high"
 
-    client = OpenAI(base_url=base_url, api_key=api_key, timeout=300, max_retries=2)
+        def ask(prompt: str) -> dict:
+            r = claude_code_query(
+                prompt, model=model, system_prompt=_PROXY_SYSTEM, json_schema=PROXY_SCHEMA,
+                effort=effort, timeout=600,
+            )
+            return r.structured or parse_json_object(r.text) or {"reason": f"[未解析] {r.text[:200]}"}
+    else:
+        base_url, api_key = os.environ.get("MEDFORGE_JUDGE_BASE_URL"), os.environ.get("MEDFORGE_JUDGE_API_KEY")
+        if not (base_url and api_key):
+            rprint("[red]需配置 MEDFORGE_JUDGE_BASE_URL / _API_KEY(或改用 --provider claude-code)[/]")
+            sys.exit(2)
+        from openai import OpenAI
+
+        client = OpenAI(base_url=base_url, api_key=api_key, timeout=300, max_retries=2)
+
+        def ask(prompt: str) -> dict:
+            resp = client.chat.completions.create(
+                model=model, temperature=0.0, max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+                extra_body={"thinking": {"type": "enabled"}},
+            )
+            text = resp.choices[0].message.content or ""
+            return parse_json_object(text) or {"reason": f"[未解析] {text[:200]}"}
+
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     todo = [i for i, r in enumerate(rows) if r.get("proxy_correct") is None and not r.get("proxy_reason")]
-    rprint(f"代理标注 {len(todo)} / {len(rows)} 条(模型 {model})")
+    rprint(f"代理标注 {len(todo)} / {len(rows)} 条(provider {provider} / 模型 {model}"
+           + (f" / effort {effort}" if effort else "") + ")")
     lock = threading.Lock()
 
     def flush() -> None:
@@ -209,19 +256,12 @@ def label_proxy(path: Path, model: str, concurrency: int = 8) -> None:
     def one(i: int) -> None:
         s = Sample(**rows[i]["sample"])
         answer, _ = split_answer(rows[i]["output"], thinking=True)
-        resp = client.chat.completions.create(
-            model=model, temperature=0.0, max_tokens=4096,
-            messages=[{"role": "user", "content": _PROXY_PROMPT.format(
-                question=s.render_question()[:3000], gold=s.gold, answer=answer[-3000:])}],
-            extra_body={"thinking": {"type": "enabled"}},
-        )
-        text = resp.choices[0].message.content or ""
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        data = json.loads(m.group(0)) if m else {}
+        data = ask(_PROXY_PROMPT.format(
+            question=s.render_question()[:3000], gold=s.gold, answer=answer[-3000:]))
         c = data.get("correct")
         rows[i]["proxy_correct"] = c if isinstance(c, bool) else None
         rows[i]["proxy_chosen"] = data.get("chosen")
-        rows[i]["proxy_reason"] = str(data.get("reason", text[:200]))[:300]
+        rows[i]["proxy_reason"] = str(data.get("reason", ""))[:300]
 
     done = 0
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -249,7 +289,14 @@ def main() -> None:
     if "--from-runs" in argv:
         sample_from_runs(opt("--from-runs", "").split(","), int(opt("--n", "150")), Path(opt("--out", str(MCQ_OUT))))
     elif "--label-proxy" in argv:
-        label_proxy(Path(opt("--file", str(MCQ_OUT))), opt("--model", "deepseek-v4-pro"))
+        provider = opt("--provider", "") or None
+        # 换后端就换默认模型:claude-code 上 deepseek-v4-pro 这个名字根本不存在
+        default_model = "claude-opus-5" if provider == "claude-code" else "deepseek-v4-pro"
+        label_proxy(
+            Path(opt("--file", str(MCQ_OUT))), opt("--model", default_model),
+            concurrency=int(opt("--concurrency", "8")), provider=provider,
+            effort=opt("--effort", "") or None,
+        )
     elif "--generate" in argv:
         generate()
     else:

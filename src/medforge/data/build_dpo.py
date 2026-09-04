@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import sys
 import threading
@@ -137,8 +136,9 @@ def main() -> None:
         from medforge.env import load_env
 
         load_env()
-        missing = [k for k in ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
-                   if not os.environ.get(k)]
+        from medforge.verify.verifier import missing_judge_env
+
+        missing = missing_judge_env()  # 按 MEDFORGE_JUDGE_PROVIDER 变:claude-code 只需要 _MODEL
         if missing:
             rprint(f"[red]✗ LLM 仲裁已启用但 judge 未配置: {missing};配好 .env 或显式 --no-llm-arbitrate[/]")
             sys.exit(2)

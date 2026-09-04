@@ -222,3 +222,99 @@ def test_api_model_reasoning_content_merged_and_extra_body(mock_server, tmp_path
     assert row["correct"] is True  # thinking=on 默认:合并后有 </think>,守卫放行,规则层只看答案段
     meta = json.loads((tmp_path / "reports" / "runs" / "api" / "run_meta.json").read_text())
     assert meta["extra_body"] == '{"thinking": {"type": "enabled"}}'
+
+
+def test_protocol_keys_include_provider_and_effort():
+    # 同一个模型名经 CLI 与经 API 拿到的作答不是一回事:不进指纹就会被静默混进同一个 run 目录
+    from medforge.eval.run import PROTOCOL_KEYS
+
+    assert "provider" in PROTOCOL_KEYS and "effort" in PROTOCOL_KEYS
+
+
+def _fake_claude_cli(monkeypatch, text: str = "先分析一遍。答案:B", output_tokens: int = 777) -> list[dict]:
+    """打桩 claude_code_query(绝不真的拉起 CLI),记录每次调用的参数。"""
+    from medforge.verify import claude_code as cc
+
+    seen: list[dict] = []
+
+    def fake(prompt, **kw):
+        seen.append({"prompt": prompt, **kw})
+        return cc.ClaudeCodeResult(text=text, structured=None, output_tokens=output_tokens, cost_usd=0.01, raw={})
+
+    monkeypatch.setattr(cc, "claude_code_query", fake)
+    return seen
+
+
+def test_claude_code_arm_records_provider_and_null_sampling(mock_server, tmp_path, monkeypatch):
+    """claude-code 臂:提示词与其他臂逐字相同(prompt_sha 不变),CLI 设不了的旋钮一律记 null,
+    thinking 强制 off(结果里拿不到 </think>,记 on 会把每题判成未收尾)。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    seen = _fake_claude_cli(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["run", "--provider", "claude-code", "--model", "claude-opus-5",
+                                      "--run-name", "cc", "--sets", "syn", "--no-llm-judge", "--concurrency", "2"])
+    run_mod.main()
+
+    out_dir = tmp_path / "reports" / "runs" / "cc"
+    meta = json.loads((out_dir / "run_meta.json").read_text())
+    assert (meta["provider"], meta["effort"], meta["thinking"]) == ("claude-code", "high", "off")
+    assert meta["endpoint"] is None and meta["max_tokens"] is None
+    for k in ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed"):
+        assert meta[k] is None, f"{k} 记了一个没发出去的值"
+    assert meta["prompt_sha"] == run_mod.prompt_sha("default")  # 提示词没被这条路径改动
+
+    out = json.loads((out_dir / "syn.outputs.jsonl").read_text().splitlines()[0])
+    assert out["finish_reason"] == "stop" and out["completion_tokens"] == 777
+    row = json.loads((out_dir / "syn.scored.jsonl").read_text().splitlines()[0])
+    assert row["correct"] is True  # 没有 </think> 也不判未收尾:thinking=off
+    assert seen[0]["prompt"] == run_mod.PROMPT_CHOICE.format(question=_sample("q1", "B").render_question())
+    assert seen[0]["system_prompt"] == "" and seen[0]["effort"] == "high"
+    assert "provider=claude-code" in (out_dir / "summary.md").read_text()
+
+
+def test_claude_code_rejects_incompatible_flags(mock_server, tmp_path, monkeypatch):
+    """budget-forcing / --extra-body / --endpoint 在这条路上没有对应能力:开跑前就退出,别烧完额度才发现。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    _fake_claude_cli(monkeypatch)
+    base = ["run", "--provider", "claude-code", "--model", "claude-opus-5", "--run-name", "bad",
+            "--sets", "syn", "--no-llm-judge"]
+    for extra in (["--mode", "budget-forcing"], ["--extra-body", '{"thinking": {}}'], ["--endpoint", mock_server]):
+        monkeypatch.setattr(sys, "argv", base + extra)
+        with pytest.raises(SystemExit) as e:
+            run_mod.main()
+        assert e.value.code == 2
+    assert not (tmp_path / "reports" / "runs" / "bad").exists()  # 早退:连目录都不该建
+
+    # 反向:openai 臂不接受 --effort(CLI 专属),缺 --endpoint 也要报错
+    monkeypatch.setattr(sys, "argv", ["run", "--model", "m", "--run-name", "bad2", "--sets", "syn",
+                                      "--no-llm-judge", "--endpoint", mock_server, "--effort", "high"])
+    with pytest.raises(SystemExit) as e:
+        run_mod.main()
+    assert e.value.code == 2
+    monkeypatch.setattr(sys, "argv", ["run", "--model", "m", "--run-name", "bad3", "--sets", "syn", "--no-llm-judge"])
+    with pytest.raises(SystemExit) as e:
+        run_mod.main()
+    assert e.value.code == 2
+
+
+def test_run_set_claude_code_budget_forcing_raises(tmp_path, monkeypatch):
+    # 绕过 CLI 直接调 run_set 也拦得住:budget forcing 要 /v1/completions 裸 prompt,CLI 给不了
+    from medforge.eval.run import run_set
+
+    _fake_claude_cli(monkeypatch)
+    with pytest.raises(SystemExit, match="budget-forcing"):
+        run_set("s", [_sample("q1", "B")], tmp_path, model="claude-opus-5", allow_llm_judge=False,
+                gen={"provider": "claude-code", "mode": "budget-forcing"})

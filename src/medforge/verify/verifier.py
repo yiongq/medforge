@@ -13,9 +13,15 @@
   - DPO 数据构造:采样多解 → 判对错 → 对/错配偏好对
   - 评测:开放题的对错判定
 
-provider 无关:MEDFORGE_JUDGE_BASE_URL / MEDFORGE_JUDGE_API_KEY /
-MEDFORGE_JUDGE_MODEL 三个环境变量即可切 DeepSeek/智谱/Claude,
-选谁由 200 题人工校准集的一致率决定(见 docs/adr/001)。
+provider 无关,两条后端都由环境变量切(选谁由 200 题人工校准集的一致率决定,见 docs/adr/001):
+  - MEDFORGE_JUDGE_PROVIDER=openai(默认):MEDFORGE_JUDGE_BASE_URL / _API_KEY / _MODEL,
+    走 OpenAI 兼容接口,可指 DeepSeek/智谱/任何兼容层;
+  - MEDFORGE_JUDGE_PROVIDER=claude-code:走本机已登录的 Claude Code CLI(用订阅额度,不用 API key),
+    只需 MEDFORGE_JUDGE_MODEL(如 claude-opus-5),可选 MEDFORGE_JUDGE_EFFORT=low|medium|high|max。
+    细节见 medforge.verify.claude_code 与 docs/claude-code-provider.md。
+
+注意:判卷员可以用 Claude,蒸馏教师不行——Anthropic 消费者条款禁止用 Claude 输出训练其他模型,
+data/build_distill 的教师角色继续用 DeepSeek(其条款 §4.2 允许蒸馏)。
 """
 
 from __future__ import annotations
@@ -103,10 +109,77 @@ _JUDGE_PROMPT = """你是医学考试判卷员。判断考生的最终答案与�
 拿不准时输出 {{"correct": null, "reason": "..."}},不要硬判。"""
 
 
+# claude-code 后端用结构化输出,省掉「模型在 JSON 外面裹一段话」的解析风险;
+# correct 允许 null 与提示词里的「拿不准」口径一致
+JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {"correct": {"type": ["boolean", "null"]}, "reason": {"type": "string"}},
+    "required": ["correct", "reason"],
+}
+_JUDGE_SYSTEM = "你是严格的医学考试判卷员,只输出 JSON,不要输出任何其他文字。"
+JUDGE_PROVIDERS = ("openai", "claude-code")
+
+
+def judge_provider() -> str:
+    """判卷后端:默认 openai(历史行为),claude-code 走本机订阅。非法值按 openai 处理并不报错——
+    判分链的契约是「永不抛」,配置写错顶多退回默认后端,不该把整卷炸掉。"""
+    p = (os.environ.get("MEDFORGE_JUDGE_PROVIDER") or "openai").strip().lower()
+    return p if p in JUDGE_PROVIDERS else "openai"
+
+
+def missing_judge_env() -> list[str]:
+    """按当前 provider 返回缺失的必配环境变量,给调用方做 fail-fast。
+
+    judge 没配时 verify_by_llm 只会静默弃权,而弃权计错——整卷分数会无声塌一半,
+    所以 eval/DPO 入口宁可开跑前就退出。claude-code 不需要 base_url/api_key,只要模型名。
+    """
+    keys = (
+        ("MEDFORGE_JUDGE_MODEL",)
+        if judge_provider() == "claude-code"
+        else ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
+    )
+    return [k for k in keys if not os.environ.get(k)]
+
+
+def _verdict_from_judge(data: dict) -> Verdict:
+    correct = data.get("correct")
+    if not isinstance(correct, bool):
+        correct = None
+    return Verdict(correct, "llm", str(data.get("reason", ""))[:200])
+
+
+def _judge_by_claude_code(prompt: str) -> Verdict:
+    """Claude Code CLI 后端:只需 MEDFORGE_JUDGE_MODEL;失败一律弃权(与 openai 路径同契约)。"""
+    from medforge.verify.claude_code import claude_code_query, parse_json_object
+
+    model = os.environ.get("MEDFORGE_JUDGE_MODEL")
+    if not model:
+        return Verdict(None, "abstain", "judge 未配置(claude-code 需要 MEDFORGE_JUDGE_MODEL)")
+    effort = (os.environ.get("MEDFORGE_JUDGE_EFFORT") or "").strip() or None
+    try:
+        r = claude_code_query(
+            prompt, model=model, system_prompt=_JUDGE_SYSTEM, json_schema=JUDGE_SCHEMA, effort=effort, timeout=180
+        )
+    except Exception as e:  # noqa: BLE001  CLI 挂了/超时/effort 写错:弃权而不是炸掉整卷
+        return Verdict(None, "llm", f"judge 调用失败: {type(e).__name__}: {str(e)[:120]}")
+    data = r.structured or parse_json_object(r.text)
+    if data is None:
+        return Verdict(None, "llm", f"无法解析判分输出: {r.text[:100]!r}")
+    return _verdict_from_judge(data)
+
+
 def verify_by_llm(sample: Sample, output: str) -> Verdict:
     from medforge.env import load_env
 
     load_env()
+    prompt = _JUDGE_PROMPT.format(
+        question=sample.render_question()[:1500],
+        gold=sample.gold[:500],
+        output=output[-1500:],  # 结论在结尾;截尾控成本
+    )
+    if judge_provider() == "claude-code":
+        return _judge_by_claude_code(prompt)
+
     base_url = os.environ.get("MEDFORGE_JUDGE_BASE_URL")
     api_key = os.environ.get("MEDFORGE_JUDGE_API_KEY")
     model = os.environ.get("MEDFORGE_JUDGE_MODEL")
@@ -118,11 +191,6 @@ def verify_by_llm(sample: Sample, output: str) -> Verdict:
     # timeout 必须显式给:SDK 默认 10 分钟 × 重试,一次挂起就是半小时;
     # 评测的 scored 文件是 "w" 模式,整卷炸掉会连上一版判分一起丢——所以失败只弃权不抛
     client = OpenAI(base_url=base_url, api_key=api_key, timeout=60, max_retries=2)
-    prompt = _JUDGE_PROMPT.format(
-        question=sample.render_question()[:1500],
-        gold=sample.gold[:500],
-        output=output[-1500:],  # 结论在结尾;截尾控成本
-    )
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -140,10 +208,7 @@ def verify_by_llm(sample: Sample, output: str) -> Verdict:
         data = json.loads(m.group(0))
     except json.JSONDecodeError:
         return Verdict(None, "llm", f"判分输出非法 JSON: {text[:100]!r}")
-    correct = data.get("correct")
-    if not isinstance(correct, bool):
-        correct = None
-    return Verdict(correct, "llm", str(data.get("reason", ""))[:200])
+    return _verdict_from_judge(data)
 
 
 def verify(
