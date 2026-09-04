@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
-# 蒸馏 2.0 训练一条龙(租卡机):SFT → 合并 LoRA → v3 协议评测(采样臂 + 强制收尾臂)→ 自动关机(可选)。
-# 前置:bootstrap + setup_train_env 已跑完;data/processed/sft_distill_v1.jsonl 已传到机器;.env 已放好。
+# SFT 训练一条龙(租卡机):SFT → 合并 LoRA → v3 协议评测 → 自动关机(可选)。
+# 前置:bootstrap + setup_train_env 已跑完;教材 jsonl 已传到机器;.env 已放好。
 # 用法:bash scripts/train_distill.sh [配置,默认 configs/sft_distill_qwen35_4b_lora.yaml] [run 前缀,默认 distill]
 #      SHUTDOWN=1 bash scripts/train_distill.sh   # 评测完直接 shutdown(AutoDL 支持实例内关机)
+#
+# 一切都能用环境变量覆盖(位置参数优先,不传时行为与从前逐字相同),第二阶段的弃权训练走同一个脚本:
+#   CFG=configs/sft_abstain_qwen35_4b_lora.yaml RUN_PREFIX=abstain bash scripts/train_distill.sh
+#   CFG=… OUTPUT_DIR=… DATASET=… RUN_PREFIX=… EVAL_ARMS=smoke,sample,abstain bash scripts/train_distill.sh
+# OUTPUT_DIR / DATASET 默认从配置里读:单一事实源仍是 yaml(swift sft 只认 yaml),
+# 覆盖它们只改本脚本取路径的方式(教材检查 / 找 checkpoint / merge),不一致时会告警。
 set -euo pipefail
-CFG="${1:-configs/sft_distill_qwen35_4b_lora.yaml}"
-PREFIX="${2:-distill}"
+CFG="${1:-${CFG:-configs/sft_distill_qwen35_4b_lora.yaml}}"
+PREFIX="${2:-${RUN_PREFIX:-distill}}"
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"; export UV_CACHE_DIR="${UV_CACHE_DIR:-/root/autodl-tmp/uv-cache}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
 unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
 SWIFT="$HOME/swift-env/bin/swift"
-OUT=$(grep -E "^output_dir:" "$CFG" | awk '{print $2}')
-DATA=$(grep -E "^dataset:" "$CFG" | awk '{print $2}')
+CFG_OUT=$(grep -E "^output_dir:" "$CFG" | awk '{print $2}')
+CFG_DATA=$(grep -E "^dataset:" "$CFG" | awk '{print $2}')
+OUT="${OUTPUT_DIR:-$CFG_OUT}"
+DATA="${DATASET:-$CFG_DATA}"
+[ "$OUT" = "$CFG_OUT" ] || echo "! OUTPUT_DIR=$OUT ≠ 配置里的 $CFG_OUT:swift sft 仍写到配置那个目录"
+[ "$DATA" = "$CFG_DATA" ] || echo "! DATASET=$DATA ≠ 配置里的 $CFG_DATA:swift sft 仍读配置那份教材"
+# 评测臂:abstain 臂(--prompt abstain,run 名 $PREFIX-v3-abstain)与 sample 臂(默认提示词,
+# run 名 $PREFIX-v3-sample)是弃权验收的一对配对输入,见 medforge.eval.abstain_report
+ARMS="${EVAL_ARMS:-smoke,sample,forcing,abstain}"
 mkdir -p logs "reports/runs/$PREFIX-v3"
 [ -f "$DATA" ] || { echo "✗ 教材不存在: $DATA"; exit 2; }
 echo "== 教材 $DATA: $(wc -l < "$DATA") 条 =="
@@ -61,10 +74,11 @@ echo "   checkpoint: $BEST"
 "$SWIFT" export --adapters "$BEST" --merge_lora true --output_dir "$OUT/merged" 2>&1 | tail -3
 ls "$OUT/merged" | head -3
 
-# 3) v3 评测:与基座、DPO 完全同一套臂(采样 + 强制收尾),同一批题逐题配对
+# 3) v3 评测:与基座、DPO 同一套臂(采样 + 强制收尾),同一批题逐题配对;再加 abstain 臂量弃权
 echo "== [3/3] eval $(date +%T) =="
 pkill -f "vllm serv[e]" 2>/dev/null || true; sleep 5
-RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" smoke,sample,forcing
+RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" "$ARMS"
 pkill -f "vllm serv[e]" 2>/dev/null || true
-echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-{sample,forcing}/;把小文件 rsync 回本地再关机"
+echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-*/;把小文件 rsync 回本地再关机"
+echo "  弃权验收(本地):uv run python -m medforge.eval.abstain_report --run $PREFIX-v3-abstain --ref distill-v3-sample"
 [ "${SHUTDOWN:-0}" = "1" ] && { sync; shutdown; }

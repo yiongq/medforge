@@ -1,0 +1,57 @@
+# 弃权训练(第二阶段 SFT):在**蒸馏 2.0 合并权重**之上,只教「不会的题说答案:不确定」。
+# 教材 = build_abstain 产出的 data/processed/sft_abstain_v1.jsonl(蒸馏模型自采样 → known/unknown 分类),
+# 报告 reports/abstain-dataset.md。运行:
+#   CFG=configs/sft_abstain_qwen35_4b_lora.yaml RUN_PREFIX=abstain bash scripts/train_distill.sh
+#
+# 与 configs/sft_distill_qwen35_4b_lora.yaml 的差别只有四处,其余 31 个键逐字相同
+# (跨阶段可比:换一堆超参再看效果,就分不清是弃权数据起的作用还是超参起的作用):
+#   ① model: Qwen/Qwen3.5-4B → output/sft_distill_v1/merged
+#      第二阶段的基座是**第一阶段的产物**。必须是 merged 目录而不是再挂一层 LoRA:
+#      在 LoRA 上叠 LoRA 会让「弃权」的梯度与「蒸馏」的梯度共用同一批低秩参数,两者互相稀释。
+#      跑之前确认这个目录存在(scripts/train_distill.sh 的 merge 步骤产出)。
+#   ② dataset: sft_distill_v1.jsonl → sft_abstain_v1.jsonl
+#   ③ num_train_epochs: 2 → 1
+#      弃权是一个**行为开关**而不是一批新知识,一轮足够;两轮的实测风险是过拟合到过渡句,
+#      模型在会做的题上也开始写「不足以支撑一个有把握的结论」(见数据报告 §5 的待办)。
+#   ④ learning_rate: 5e-5 → 2e-5
+#      第二阶段动的是一个已经调好的模型,学习率必须比第一阶段低:同样的 5e-5 会把蒸馏学到的
+#      作答能力一起改写,表现为覆盖率和选择性准确率一起掉(那是灾难性遗忘,不是学会了弃权)。
+#   ⑤ output_dir: output/sft_distill_v1 → output/sft_abstain_v1
+model: output/sft_distill_v1/merged
+tuner_type: lora
+target_modules: all-linear
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+learning_rate: 2.0e-5
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+num_train_epochs: 1
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16   # 有效 batch 16
+
+max_length: 8192                  # 数据侧已硬筛(build_abstain --train-max-length),超限率应为 0
+truncation_strategy: delete       # 显式:超长丢弃而非截断
+lazy_tokenize: false              # 【必须】否则 filtered 计数不会在开训前打印,止损闸空转
+packing: false                    # 显式关闭:packing 跨样本拼接会污染 </think> 边界信号
+use_liger_kernel: true            # 【必须】8192 × 大词表的 logits 不开 fused CE 会爆显存
+torch_dtype: bfloat16
+gradient_checkpointing: true
+seed: 42
+
+dataset: data/processed/sft_abstain_v1.jsonl
+add_non_thinking_prefix: true     # 通用回放样本无 think 段:自动补空思考前缀
+loss_scale: ignore_empty_think    # 空 think 不计损失
+split_dataset_ratio: 0.02
+eval_strategy: steps              # 【必须】eval_steps 单独出现不必然打开评估
+eval_steps: 50
+save_steps: 50
+save_total_limit: -1              # 不限:最佳 ckpt 不能在训练结束前被删
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+logging_steps: 5
+output_dir: output/sft_abstain_v1
+
+report_to: swanlab
+swanlab_project: medforge
+swanlab_mode: cloud
