@@ -12,6 +12,13 @@
 抽样设计:开放题 120(验证器最难判的形态,DPO 数据构造的主战场)+
 选择题 80(评测判分的主形态,从 cmexam-validation 抽——刻意避开 test,
 不给「对着考卷调判卷程序」留任何口实)。seed 固定,抽样可复现。
+
+第三种用法(W2 审查后补):LLM 兜底层在评测里实际判的是「写完了、但规则层从作答段抽不出字母」的
+**选择题**,而上面那 200 题里选择题全被规则层接住、LLM 层只判过开放题——校准分布与工作分布不重叠。
+    # ③ 从存档答卷里按卷分层抽 LLM 层真正判过的题 → data/calibration/pending-mcq.jsonl
+    uv run python -m medforge.verify.sample_calibration --from-runs base-v2,sft-v2,dpo-v2,base-v3-sample --n 150
+    # ④ 用另一个更强的模型做代理标注(proxy_correct),人工再抽检;calibrate 用 --label-field 选标签列
+    uv run python -m medforge.verify.sample_calibration --label-proxy --file data/calibration/pending-mcq.jsonl
 """
 
 from __future__ import annotations
@@ -34,6 +41,24 @@ SEED = 42
 N_OPEN, N_CHOICE = 120, 80
 
 _GEN_PROMPT = "你是医学助手,回答下面的问题。先给出推理过程,最后一行以「最终答案:」开头给出结论。\n\n{question}"
+MCQ_OUT = ROOT / "data" / "calibration" / "pending-mcq.jsonl"
+
+# 代理标注用的提示词刻意与 verifier._JUDGE_PROMPT 不同(否则量的是判卷员和它自己的一致率):
+# 给全部选项、要求先抽出考生最终选的字母再比对,并允许 null
+_PROXY_PROMPT = """你是严格的医学考试判卷员。下面是一道选择题、标准答案,以及考生作答的结论段(思考过程已去掉)。
+请先找出考生**最终**选定的选项字母(多选题写全部字母;若考生改口,以最后一次明确表态为准;
+若只给了解释没有明确选项、或同时给出多个互相矛盾的答案,视为无法确定),再判断它与标准答案是否**完全相同**
+(多选题多选或少选都算错)。
+
+题目与选项:
+{question}
+
+标准答案:{gold}
+
+考生作答结论段:
+{answer}
+
+只输出 JSON:{{"chosen": "字母或 null", "correct": true/false/null, "reason": "一句话"}}"""
 
 
 def sample() -> None:
@@ -107,8 +132,125 @@ def generate() -> None:
     rprint(f"[green]✓[/] 生成完毕(剩余空缺 {remaining})→ {OUT},下一步填 human_correct 后跑 calibrate")
 
 
+def sample_from_runs(runs: list[str], n: int, out: Path = MCQ_OUT, seed: int = SEED) -> int:
+    """从存档答卷里抽 LLM 层真正判过的题:method == "llm" 且作答已收尾(未收尾的现在被守卫挡在 LLM 层之前)。
+    按卷分层等额抽,seed 固定。落盘字段:sample / output / run / set / machine_correct(当时的 LLM 判定)
+    / human_correct / proxy_correct(均待填)。返回落盘条数。"""
+    from medforge.data.sources import EVAL_SOURCES, load_source
+    from medforge.verify.verifier import split_answer
+
+    runs_dir = ROOT / "reports" / "runs"
+    by_set: dict[str, list[dict]] = {}
+    cache: dict[str, dict[str, Sample]] = {}
+    for run in runs:
+        for eval_set in EVAL_SOURCES:
+            scored, outs = runs_dir / run / f"{eval_set}.scored.jsonl", runs_dir / run / f"{eval_set}.outputs.jsonl"
+            if not (scored.exists() and outs.exists()):
+                continue
+            samples = cache.setdefault(eval_set, {x.id: x for x in load_source(eval_set)})
+            outputs = {r["id"]: r["output"] for r in map(json.loads, outs.read_text(encoding="utf-8").splitlines()) if r}
+            for row in map(json.loads, scored.read_text(encoding="utf-8").splitlines()):
+                if row.get("method") != "llm" or row["id"] not in outputs or row["id"] not in samples:
+                    continue
+                _, unfinished = split_answer(outputs[row["id"]], thinking=True)
+                if unfinished:
+                    continue
+                by_set.setdefault(eval_set, []).append({
+                    "sample": samples[row["id"]].to_dict(), "output": outputs[row["id"]],
+                    "run": run, "set": eval_set, "machine_correct": row.get("correct"),
+                    "human_correct": None, "proxy_correct": None,
+                })
+    rng = random.Random(seed)
+    quota = {k: n // len(by_set) for k in by_set} if by_set else {}
+    picked: list[dict] = []
+    for k, pool in by_set.items():
+        rng.shuffle(pool)
+        picked += pool[: quota[k]]
+    leftover = [r for k, pool in by_set.items() for r in pool[quota[k] :]]
+    rng.shuffle(leftover)
+    picked += leftover[: max(0, n - len(picked))]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as f:
+        for r in picked:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    pool_sizes = {k: len(v) for k, v in by_set.items()}
+    rprint(f"[green]✓[/] 从 {runs} 抽 {len(picked)} 题(候选池 {pool_sizes})→ {out}")
+    return len(picked)
+
+
+def label_proxy(path: Path, model: str, concurrency: int = 8) -> None:
+    """用另一个更强的模型代理标注 proxy_correct(仍需人工抽检);中断重跑只补空缺。"""
+    from medforge.env import load_env
+    from medforge.verify.verifier import split_answer
+
+    load_env()
+    base_url, api_key = os.environ.get("MEDFORGE_JUDGE_BASE_URL"), os.environ.get("MEDFORGE_JUDGE_API_KEY")
+    if not (base_url and api_key):
+        rprint("[red]需配置 MEDFORGE_JUDGE_BASE_URL / _API_KEY[/]")
+        sys.exit(2)
+    if model == os.environ.get("MEDFORGE_JUDGE_MODEL"):
+        rprint(f"[red]代理标注模型不能与判卷模型相同({model}):那量的是它和自己的一致率[/]")
+        sys.exit(2)
+    import re
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from openai import OpenAI
+
+    client = OpenAI(base_url=base_url, api_key=api_key, timeout=300, max_retries=2)
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    todo = [i for i, r in enumerate(rows) if r.get("proxy_correct") is None and not r.get("proxy_reason")]
+    rprint(f"代理标注 {len(todo)} / {len(rows)} 条(模型 {model})")
+    lock = threading.Lock()
+
+    def flush() -> None:
+        path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+
+    def one(i: int) -> None:
+        s = Sample(**rows[i]["sample"])
+        answer, _ = split_answer(rows[i]["output"], thinking=True)
+        resp = client.chat.completions.create(
+            model=model, temperature=0.0, max_tokens=4096,
+            messages=[{"role": "user", "content": _PROXY_PROMPT.format(
+                question=s.render_question()[:3000], gold=s.gold, answer=answer[-3000:])}],
+            extra_body={"thinking": {"type": "enabled"}},
+        )
+        text = resp.choices[0].message.content or ""
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        data = json.loads(m.group(0)) if m else {}
+        c = data.get("correct")
+        rows[i]["proxy_correct"] = c if isinstance(c, bool) else None
+        rows[i]["proxy_chosen"] = data.get("chosen")
+        rows[i]["proxy_reason"] = str(data.get("reason", text[:200]))[:300]
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futs = {pool.submit(one, i): i for i in todo}
+        for fut in as_completed(futs):
+            with lock:
+                done += 1
+                try:
+                    fut.result()
+                except Exception as e:  # noqa: BLE001
+                    rprint(f"  ✗ {rows[futs[fut]]['sample']['id']}: {type(e).__name__}: {e}")
+                if done % 10 == 0:
+                    flush()
+    flush()
+    n_null = sum(1 for r in rows if r.get("proxy_correct") is None)
+    rprint(f"[green]✓[/] 代理标注完成,无法判定 {n_null} 条 → {path};人工抽检后填 human_correct")
+
+
 def main() -> None:
-    if "--generate" in sys.argv:
+    argv = sys.argv[1:]
+
+    def opt(name: str, default: str) -> str:
+        return argv[argv.index(name) + 1] if name in argv else default
+
+    if "--from-runs" in argv:
+        sample_from_runs(opt("--from-runs", "").split(","), int(opt("--n", "150")), Path(opt("--out", str(MCQ_OUT))))
+    elif "--label-proxy" in argv:
+        label_proxy(Path(opt("--file", str(MCQ_OUT))), opt("--model", "deepseek-v4-pro"))
+    elif "--generate" in argv:
         generate()
     else:
         sample()
