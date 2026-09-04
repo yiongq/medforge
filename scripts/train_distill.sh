@@ -1,18 +1,41 @@
 #!/usr/bin/env bash
-# 蒸馏 2.0 训练一条龙(租卡机):SFT → 合并 LoRA → v3 协议评测(采样臂 + 强制收尾臂)→ 自动关机(可选)。
-# 前置:bootstrap + setup_train_env 已跑完;data/processed/sft_distill_v1.jsonl 已传到机器;.env 已放好。
+# SFT 训练一条龙(租卡机):SFT → 合并 LoRA → v3 协议评测 → 自动关机(可选)。
+# 前置:bootstrap + setup_train_env 已跑完;教材 jsonl 已传到机器;.env 已放好。
 # 用法:bash scripts/train_distill.sh [配置,默认 configs/sft_distill_qwen35_4b_lora.yaml] [run 前缀,默认 distill]
 #      SHUTDOWN=1 bash scripts/train_distill.sh   # 评测完直接 shutdown(AutoDL 支持实例内关机)
+#
+# 一切都能用环境变量覆盖(位置参数优先,不传时行为与从前逐字相同),第二阶段的弃权训练走同一个脚本:
+#   CFG=configs/sft_abstain_qwen35_4b_lora.yaml RUN_PREFIX=abstain bash scripts/train_distill.sh
+#   CFG=… OUTPUT_DIR=… DATASET=… RUN_PREFIX=… EVAL_ARMS=smoke,sample,abstain bash scripts/train_distill.sh
+# OUTPUT_DIR / DATASET 默认从配置里读:单一事实源仍是 yaml(swift sft 只认 yaml),
+# 覆盖它们只改本脚本取路径的方式(教材检查 / 找 checkpoint / merge),不一致时会告警。
 set -euo pipefail
-CFG="${1:-configs/sft_distill_qwen35_4b_lora.yaml}"
-PREFIX="${2:-distill}"
+DEFAULT_CFG="configs/sft_distill_qwen35_4b_lora.yaml"
+CFG="${1:-${CFG:-$DEFAULT_CFG}}"
+PREFIX="${2:-${RUN_PREFIX:-distill}}"
+# 换了配置却忘了 run 前缀是会静默毁数据的:评测会以 RUN_PREFIX=distill 写进
+# reports/runs/distill-v3-sample/(abstain_report 唯一的参照 run,已入库),而 eval/run.py 的
+# 协议闸拦不住——--served-model-name 也叫 "distill",解码/提示词/抽样卷逐字相同,
+# check_protocol 判定「同一套协议」直接放行,旧答卷被 "w" 覆写、断点续跑还会复用旧模型的输出。
+[ "$CFG" = "$DEFAULT_CFG" ] || [ -n "${RUN_PREFIX:-}" ] || [ -n "${2:-}" ] || {
+  echo "✗ 换了配置($CFG)却没给 RUN_PREFIX:评测会覆写 reports/runs/distill-v3-*"
+  echo "  例:CFG=$CFG RUN_PREFIX=abstain bash scripts/train_distill.sh"; exit 2; }
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/bin:$PATH"; export UV_CACHE_DIR="${UV_CACHE_DIR:-/root/autodl-tmp/uv-cache}"
 export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$PWD/models}"
 unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
 SWIFT="$HOME/swift-env/bin/swift"
-OUT=$(grep -E "^output_dir:" "$CFG" | awk '{print $2}')
-DATA=$(grep -E "^dataset:" "$CFG" | awk '{print $2}')
+CFG_OUT=$(grep -E "^output_dir:" "$CFG" | awk '{print $2}')
+CFG_DATA=$(grep -E "^dataset:" "$CFG" | awk '{print $2}')
+OUT="${OUTPUT_DIR:-$CFG_OUT}"
+DATA="${DATASET:-$CFG_DATA}"
+[ "$OUT" = "$CFG_OUT" ] || echo "! OUTPUT_DIR=$OUT ≠ 配置里的 $CFG_OUT:swift sft 仍写到配置那个目录"
+[ "$DATA" = "$CFG_DATA" ] || echo "! DATASET=$DATA ≠ 配置里的 $CFG_DATA:swift sft 仍读配置那份教材"
+# 评测臂:弃权验收的配对输入是 $PREFIX-v3-sample(默认提示词 + v3 采样)与 distill-v3-sample
+# ——逐参数同协议,只差权重;弃权教材的 user 也正是这份默认提示词(build_abstain 用
+# eval.run.PROMPT_CHOICE 渲染)。$PREFIX-v3-abstain 是另一条臂(贪心 8192 + --prompt abstain),
+# 量的是「换个提示词能不能白拿弃权」,只能与 base-v3-abstain 这类同协议的臂比,不要混用。
+ARMS="${EVAL_ARMS:-smoke,sample,forcing,abstain}"
 mkdir -p logs "reports/runs/$PREFIX-v3"
 [ -f "$DATA" ] || { echo "✗ 教材不存在: $DATA"; exit 2; }
 echo "== 教材 $DATA: $(wc -l < "$DATA") 条 =="
@@ -61,10 +84,11 @@ echo "   checkpoint: $BEST"
 "$SWIFT" export --adapters "$BEST" --merge_lora true --output_dir "$OUT/merged" 2>&1 | tail -3
 ls "$OUT/merged" | head -3
 
-# 3) v3 评测:与基座、DPO 完全同一套臂(采样 + 强制收尾),同一批题逐题配对
+# 3) v3 评测:与基座、DPO 同一套臂(采样 + 强制收尾),同一批题逐题配对;再加 abstain 臂量弃权
 echo "== [3/3] eval $(date +%T) =="
 pkill -f "vllm serv[e]" 2>/dev/null || true; sleep 5
-RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" smoke,sample,forcing
+RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" "$ARMS"
 pkill -f "vllm serv[e]" 2>/dev/null || true
-echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-{sample,forcing}/;把小文件 rsync 回本地再关机"
+echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-*/;把小文件 rsync 回本地再关机"
+echo "  弃权验收(本地):uv run python -m medforge.eval.abstain_report --run $PREFIX-v3-sample --ref distill-v3-sample"
 [ "${SHUTDOWN:-0}" = "1" ] && { sync; shutdown; }

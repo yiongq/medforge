@@ -109,5 +109,17 @@ uv run python -m medforge.data.download         # 拉取数据集(国内可加 H
 - [x] W3 部署(vLLM BF16/FP8 压测 ✅;监控面板 ❌)+ 前台(同题四方案回放 + live ✅)· 9B 定稿复跑(❌ 未做)
 - [x] W2 审查 + 协议 v3:截断守卫 / 四态判分 / 配对检验 / 解码裁决(✅ 2026-09)
 - [x] 训练臂在 v3 协议下重评(DPO ✅ 持平;旧 SFT 无权重,以蒸馏 2.0 替代 ✅ +6.5pp)
-- [ ] 蒸馏 2.0 上线(live 模式 / 部署配置)· 弃权训练 · 多 seed
+- [ ] 蒸馏 2.0 上线(live 模式 / 部署配置)· 弃权训练(数据与配置已就位,待训) · 多 seed
 - [ ] 二期 医疗工具调用模块 · 医疗 VQA LoRA 分支
+
+### 训练线的下一段:弃权(第二阶段 SFT)
+
+蒸馏 2.0 之后模型的问题不再是「答不完」,而是**不会也照答**——医疗场景里一个自信的错答比一句
+「不确定」贵得多。做法是 R-Tuning 式的拒答微调:让蒸馏模型在一批没训过的题上自采样 K 次,
+用严格可用协议(收尾 ∧ 声明 ∧ 判对)把题分成「K 次全对」和「一次没对」两堆,前者原样保留、
+后者把它自己的思考接上一句过渡改写成「答案:不确定」,半对半错的题一律丢掉——弃权必须落在
+这个模型真的不会的题上,否则教的是随机拒答。数据构造见
+[`src/medforge/data/build_abstain.py`](src/medforge/data/build_abstain.py),训练配置
+[`configs/sft_abstain_qwen35_4b_lora.yaml`](configs/sft_abstain_qwen35_4b_lora.yaml)(基座 = 蒸馏合并权重),
+验收不看准确率而看选择性预测口径的覆盖率 / 选择性准确率 / 弃权精度召回,由
+[`medforge.eval.abstain_report`](src/medforge/eval/abstain_report.py) 与训练前的同模型 run 配对出表。
