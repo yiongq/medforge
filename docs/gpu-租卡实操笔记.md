@@ -119,8 +119,34 @@ completion 里根本没有 `</think>`,奖励插件按「未收尾」全判 -1、
 整批全判未收尾时 warn 一次提醒查这个键。二是 `generation_batch_size` 数的是 **completion 条数**不是题数,
 唯一题数 = 它 / `num_generations`;它由 `per_device_train_batch_size × world_size × gradient_accumulation_steps`
 推出来,所以单卡上 `gradient_accumulation_steps` 才是决定「每次更新看几道题」的旋钮
-(=2 时每次更新只有 2 道题,是能配出来的最噪的一档;本配置用 16 → 16 道题 × 8 个解)。
+(=2 时每次更新只有 2 道题,是能配出来的最噪的一档;本配置是 batch 1 × 累积 128 → 128 条 = 16 道题 × 8 个解)。
 
 **参数名闸门和 SFT 那道一样,但要换 dataclass。** GRPO 的键散在
 `RLHFArguments / GRPOArguments / GRPOArgumentsMixin / RolloutTrainerArgumentsMixin / VllmArguments` 五个 dataclass 里,
 脚本走 `RLHFArguments.__mro__` 一次收全。写错的键 ms-swift 是静默忽略而不是报错,训完才发现某个开关没生效最贵。
+
+**题池要先按难度筛过再上机。** 第一版拿随机 6000 题跑,ms-swift 自己的 `frac_reward_zero_std` 报 **0.60~0.69**:
+六到七成的 prompt 组里 8 个 rollout 拿到完全相同的奖励(模型要么全对要么全错),组内优势恒 0、对梯度零贡献;
+而单卡一个优化步(128 条 completion)约 6 分钟,等于每步烧 4 分钟在废题上。换成
+`build_grpo --samples data/processed/abstain_samples.jsonl`:从弃权阶段的自采样里挑「4 次对 1~3 次」的题
+(正是 build_abstain 整类丢掉的 unstable,没被任何阶段训过),4000 题里筛出 912 道,100 道作 eval、812 道作训练。
+
+**8 个单卡坑,每个都换一次重启。**(1~7 的定论随 GRPO 配置一起合入 `configs/grpo_qwen35_4b_lora.yaml` 的注释;8 属于第二阶段,已经在 `configs/sft_abstain_qwen35_4b_lora.yaml`。)
+
+1. Qwen3.5 的 Gated-DeltaNet/Mamba 层按 seq 预分配 cache:`vllm_gpu_memory_utilization 0.4` 下
+   `max_num_seqs (128) exceeds available Mamba cache blocks (121)` → `vllm_max_num_seqs: 32`。
+2. `vllm_gpu_memory_utilization 0.3` 起不来(`No available memory for the cache blocks`:4B 权重本身就吃光了预算),
+   0.4 才有 KV 的余量——这个值上下都是墙,别乱调。
+3. 首次权重同步到 vLLM 会一次性要 15.16 GiB(4.07B 参数 × fp32),差 0.6 GB OOM →
+   `move_model_batches: 8`(分批传)+ `vllm_enforce_eager: true`(省掉 CUDA graph 的那块常驻显存)。
+4. 训练侧 logits 才是真吃显存的:`per_device_train_batch_size 8` × ~4k token × 248k 词表 × fp32 = 30 GiB →
+   `per_device_train_batch_size: 1` + `gradient_accumulation_steps: 128`(`generation_batch_size` 仍是 128 = 16 题 × 8)。
+5. 即使 batch 1,普通 GRPO loss 还是在第 3 步 OOM(差 3.79 GiB)→ `use_liger_kernel: true`
+   (ms-swift 会换成 `LigerFusedLinearGRPOLoss`,分块算、不物化整张 logits),启动环境加
+   `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`。
+6. `global eval batch size (1 x 1) must be evenly divisible by num_generations_eval (8)` →
+   `num_generations_eval: 1` 配 `per_device_eval_batch_size: 1`(评估不需要组内比较)。
+7. 采样启动器被起了两次(等 vLLM 就绪的循环误判),落出重复的 (id,k) → 起之前先 `pgrep`,
+   读采样文件时按 (id,k) 去重(`load_samples_file` 已经是同 (id,k) 取最后一条)。
+8. 第二阶段弃权 SFT 的 `max_length: 8192` OOM:liger 对 Qwen3.5 的多模态 forward 不融合 logits,
+   8192 × 248k × fp32 = 8 GB → 降到 6144,代价是丢 3.4% 的行。
