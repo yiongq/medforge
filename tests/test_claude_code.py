@@ -13,8 +13,8 @@ import subprocess
 
 import pytest
 
+from medforge.claude import client as cc
 from medforge.data.schema import Sample
-from medforge.verify import claude_code as cc
 
 SUCCESS = {
     "subtype": "success",

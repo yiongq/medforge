@@ -204,8 +204,8 @@ def label_proxy(
 
     provider=None 时取 MEDFORGE_JUDGE_PROVIDER(再默认 openai)。落盘字段与后端无关。
     """
+    from medforge.claude.client import EFFORTS, claude_code_query, parse_json_object
     from medforge.env import load_env
-    from medforge.verify.claude_code import EFFORTS, claude_code_query, parse_json_object
     from medforge.verify.verifier import judge_provider, split_answer
 
     load_env()

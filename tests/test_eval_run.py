@@ -233,7 +233,7 @@ def test_protocol_keys_include_provider_and_effort():
 
 def _fake_claude_cli(monkeypatch, text: str = "先分析一遍。答案:B", output_tokens: int = 777) -> list[dict]:
     """打桩 claude_code_query(绝不真的拉起 CLI),记录每次调用的参数。"""
-    from medforge.verify import claude_code as cc
+    from medforge.claude import client as cc
 
     seen: list[dict] = []
 
@@ -374,7 +374,7 @@ def test_claude_code_clamps_concurrency(mock_server, tmp_path, monkeypatch):
 
 def test_effort_choices_match_cli():
     # v2.1.252 的 `claude --help`:low, medium, high, xhigh, max——少一档就是拒绝合法配置
+    from medforge.claude.client import EFFORTS as CC_EFFORTS
     from medforge.eval.run import EFFORTS
-    from medforge.verify.claude_code import EFFORTS as CC_EFFORTS
 
     assert EFFORTS == CC_EFFORTS == ("low", "medium", "high", "xhigh", "max")

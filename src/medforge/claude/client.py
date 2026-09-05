@@ -31,7 +31,7 @@
 其他模型,教师角色(medforge.data.build_distill)继续用 DeepSeek(其条款 §4.2 明确允许蒸馏)。
 
 冒烟自测(验证本机登录态,先 `claude auth status` / `claude auth login`):
-    uv run python -m medforge.verify.claude_code --model claude-sonnet-5
+    uv run python -m medforge.claude.client --model claude-sonnet-5
 """
 
 from __future__ import annotations

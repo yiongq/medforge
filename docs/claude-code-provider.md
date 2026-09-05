@@ -8,7 +8,7 @@
 | 代理标注 proxy_correct | `verify/sample_calibration.py::label_proxy` | 同上,或 `--provider claude-code` |
 | 参考/API 评测臂 | `eval/run.py` | `--provider claude-code` |
 
-底层是 `verify/claude_code.py`:把一次 headless 调用(`claude -p ... --output-format json`)包成同步函数。
+底层是 `claude/client.py`:把一次 headless 调用(`claude -p ... --output-format json`)包成同步函数。
 
 **两个角色不在此列,而且不许切:蒸馏教师、DPO 偏好对仲裁。** Anthropic 消费者条款禁止用 Claude 的
 输出训练其他模型;`data/build_distill.py` 的教师(题解直接进 SFT 教材)与 `data/build_dpo.py` 的
@@ -21,7 +21,7 @@ LLM 仲裁(标签直接决定哪条解是 chosen、哪条是 rejected,即偏好�
 ```bash
 claude auth login     # 用 Max 账号登录,登录态存在本机(注意是 `auth login`,没有顶层 `claude login`)
 claude auth status    # 最便宜的体检:先看登录态,再花额度
-uv run python -m medforge.verify.claude_code --model claude-sonnet-5   # 冒烟:打一次最小请求
+uv run python -m medforge.claude.client --model claude-sonnet-5   # 冒烟:打一次最小请求
 ```
 
 冒烟会打印解析后的文本、结构化输出与 usage。报「退出码 1 / not logged in」就是登录态没起来。

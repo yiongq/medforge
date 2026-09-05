@@ -115,7 +115,7 @@ uv run python -m medforge.data.download         # 拉取数据集(国内可加 H
 子进程环境会清掉 `ANTHROPIC_API_KEY` 等变量,免得悄悄改走按量计费),
 评测臂另有 `--provider claude-code --effort high`;代价、口径妥协与验证方式见
 [docs/claude-code-provider.md](docs/claude-code-provider.md)(先跑
-`uv run python -m medforge.verify.claude_code --model claude-sonnet-5` 冒烟)。
+`uv run python -m medforge.claude.client --model claude-sonnet-5` 冒烟)。
 
 > 蒸馏教师与 DPO 仲裁不走这条路:Anthropic 消费者条款禁止用 Claude 输出训练其他模型,
 > `data/build_distill.py` 的教师、`data/build_dpo.py` 的偏好对仲裁继续用 DeepSeek(其条款 §4.2 允许蒸馏)。

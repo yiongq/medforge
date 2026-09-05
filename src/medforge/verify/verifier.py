@@ -18,7 +18,7 @@ provider 无关,两条后端都由环境变量切(选谁由 200 题人工校准�
     走 OpenAI 兼容接口,可指 DeepSeek/智谱/任何兼容层;
   - MEDFORGE_JUDGE_PROVIDER=claude-code:走本机已登录的 Claude Code CLI(用订阅额度,不用 API key),
     只需 MEDFORGE_JUDGE_MODEL(如 claude-opus-5),可选 MEDFORGE_JUDGE_EFFORT=low|medium|high|max。
-    细节见 medforge.verify.claude_code 与 docs/claude-code-provider.md。
+    细节见 medforge.claude.client 与 docs/claude-code-provider.md。
 
 注意:判卷员可以用 Claude,蒸馏教师不行——Anthropic 消费者条款禁止用 Claude 输出训练其他模型,
 data/build_distill 的教师角色继续用 DeepSeek(其条款 §4.2 允许蒸馏)。
@@ -145,7 +145,7 @@ def missing_judge_env() -> list[str]:
         keys = ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
         return [k for k in keys if not os.environ.get(k)]
 
-    from medforge.verify import claude_code as cc
+    from medforge.claude import client as cc
 
     problems = [k for k in ("MEDFORGE_JUDGE_MODEL",) if not os.environ.get(k)]
     if not cc.cli_available():
@@ -165,7 +165,7 @@ def _verdict_from_judge(data: dict) -> Verdict:
 
 def _judge_by_claude_code(prompt: str) -> Verdict:
     """Claude Code CLI 后端:只需 MEDFORGE_JUDGE_MODEL;失败一律弃权(与 openai 路径同契约)。"""
-    from medforge.verify.claude_code import claude_code_query, parse_json_object
+    from medforge.claude.client import claude_code_query, parse_json_object
 
     model = os.environ.get("MEDFORGE_JUDGE_MODEL")
     if not model:

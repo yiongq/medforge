@@ -188,7 +188,7 @@ def _gen_outputs(
         return (p_choice if s.is_choice else p_open).format(question=s.render_question())
 
     if provider == "claude-code":
-        from medforge.verify.claude_code import claude_code_query
+        from medforge.claude.client import claude_code_query
 
         def gen_one_cc(s: Sample) -> dict:
             # system_prompt 留空:提示词必须与其他臂逐字相同(prompt_sha 一致),不许偷偷加系统指令
