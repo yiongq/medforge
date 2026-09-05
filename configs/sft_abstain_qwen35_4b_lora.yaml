@@ -30,7 +30,7 @@ num_train_epochs: 1
 per_device_train_batch_size: 1
 gradient_accumulation_steps: 16   # 有效 batch 16
 
-max_length: 8192                  # 数据侧已硬筛(build_abstain --train-max-length),超限率应为 0
+max_length: 6144                  # 8192 在 5090 上 OOM(liger 的 Qwen3.5 多模态前向没融合 logits,8192×25万词表≈8GB);6144 只丢 3.4% 最长行(46 条弃权)
 truncation_strategy: delete       # 显式:超长丢弃而非截断
 lazy_tokenize: false              # 【必须】否则 filtered 计数不会在开训前打印,止损闸空转
 packing: false                    # 显式关闭:packing 跨样本拼接会污染 </think> 边界信号
