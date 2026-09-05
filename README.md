@@ -100,6 +100,27 @@ uv run python -m medforge.data.download         # 拉取数据集(国内可加 H
 
 训练/评测在租用 GPU 上进行:`scripts/autodl_bootstrap.sh` 一键装环境,配置见 `configs/`。
 
+### 判卷后端(验证器 LLM 兜底 / 代理标注 / 参考臂)
+
+`cp .env.example .env` 后填,两条后端二选一(`src/medforge/env.py` 读根目录 `.env`):
+
+| 变量 | 说明 |
+| --- | --- |
+| `MEDFORGE_JUDGE_PROVIDER` | `openai`(默认)/ `claude-code` |
+| `MEDFORGE_JUDGE_BASE_URL` / `_API_KEY` | 仅 `openai` 需要;任何 OpenAI 兼容端点 |
+| `MEDFORGE_JUDGE_MODEL` | 两者都要;claude-code 下写全名(如 `claude-sonnet-5`),且必须与代理标注模型不同 |
+| `MEDFORGE_JUDGE_EFFORT` | 可选,claude-code 的扩展思考档位 `low\|medium\|high\|xhigh\|max` |
+
+`claude-code` 走本机已登录的 Claude Code CLI(`claude auth login`,用订阅额度,不需要 API key;
+子进程环境会清掉 `ANTHROPIC_API_KEY` 等变量,免得悄悄改走按量计费),
+评测臂另有 `--provider claude-code --effort high`;代价、口径妥协与验证方式见
+[docs/claude-code-provider.md](docs/claude-code-provider.md)(先跑
+`uv run python -m medforge.claude.client --model claude-sonnet-5` 冒烟)。
+
+> 蒸馏教师与 DPO 仲裁不走这条路:Anthropic 消费者条款禁止用 Claude 输出训练其他模型,
+> `data/build_distill.py` 的教师、`data/build_dpo.py` 的偏好对仲裁继续用 DeepSeek(其条款 §4.2 允许蒸馏)。
+> 判卷/标注/评测是测量,可以用 Claude;凡是直接产出训练教材的一步都不行。
+
 ## 路线图
 
 - [x] W1a 骨架:数据下载与归一 / 验证器(规则层+LLM 兜底+校准 CLI)/ 去污染字面层 / 报告层 + 单测,经双路对抗审查修复

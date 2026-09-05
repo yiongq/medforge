@@ -37,3 +37,8 @@ web/dist/
 
 # 租卡机上的运行日志(vLLM / 评测 stdout)
 logs/
+
+# Claude Code 后端:本地会话/工作树/日志一律不进 git(里面有账号与会话信息)
+.claude/
+*.claude-session*.json
+calib-*.log

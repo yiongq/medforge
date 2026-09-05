@@ -222,3 +222,159 @@ def test_api_model_reasoning_content_merged_and_extra_body(mock_server, tmp_path
     assert row["correct"] is True  # thinking=on 默认:合并后有 </think>,守卫放行,规则层只看答案段
     meta = json.loads((tmp_path / "reports" / "runs" / "api" / "run_meta.json").read_text())
     assert meta["extra_body"] == '{"thinking": {"type": "enabled"}}'
+
+
+def test_protocol_keys_include_provider_and_effort():
+    # 同一个模型名经 CLI 与经 API 拿到的作答不是一回事:不进指纹就会被静默混进同一个 run 目录
+    from medforge.eval.run import PROTOCOL_KEYS
+
+    assert "provider" in PROTOCOL_KEYS and "effort" in PROTOCOL_KEYS
+
+
+def _fake_claude_cli(monkeypatch, text: str = "先分析一遍。答案:B", output_tokens: int = 777) -> list[dict]:
+    """打桩 claude_code_query(绝不真的拉起 CLI),记录每次调用的参数。"""
+    from medforge.claude import client as cc
+
+    seen: list[dict] = []
+
+    def fake(prompt, **kw):
+        seen.append({"prompt": prompt, **kw})
+        return cc.ClaudeCodeResult(text=text, structured=None, output_tokens=output_tokens, cost_usd=0.01, raw={})
+
+    monkeypatch.setattr(cc, "claude_code_query", fake)
+    return seen
+
+
+def test_claude_code_arm_records_provider_and_null_sampling(mock_server, tmp_path, monkeypatch):
+    """claude-code 臂:提示词与其他臂逐字相同(prompt_sha 不变),CLI 设不了的旋钮一律记 null,
+    thinking 强制 off(结果里拿不到 </think>,记 on 会把每题判成未收尾)。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    seen = _fake_claude_cli(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["run", "--provider", "claude-code", "--model", "claude-opus-5",
+                                      "--run-name", "cc", "--sets", "syn", "--no-llm-judge", "--concurrency", "2"])
+    run_mod.main()
+
+    out_dir = tmp_path / "reports" / "runs" / "cc"
+    meta = json.loads((out_dir / "run_meta.json").read_text())
+    assert (meta["provider"], meta["effort"], meta["thinking"]) == ("claude-code", "high", "off")
+    assert meta["endpoint"] is None and meta["max_tokens"] is None
+    for k in ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed"):
+        assert meta[k] is None, f"{k} 记了一个没发出去的值"
+    assert meta["prompt_sha"] == run_mod.prompt_sha("default")  # 提示词没被这条路径改动
+
+    out = json.loads((out_dir / "syn.outputs.jsonl").read_text().splitlines()[0])
+    assert out["finish_reason"] == "stop" and out["completion_tokens"] == 777
+    row = json.loads((out_dir / "syn.scored.jsonl").read_text().splitlines()[0])
+    assert row["correct"] is True  # 没有 </think> 也不判未收尾:thinking=off
+    assert seen[0]["prompt"] == run_mod.PROMPT_CHOICE.format(question=_sample("q1", "B").render_question())
+    assert seen[0]["system_prompt"] == "" and seen[0]["effort"] == "high"
+    assert "provider=claude-code" in (out_dir / "summary.md").read_text()
+
+
+def test_claude_code_rejects_incompatible_flags(mock_server, tmp_path, monkeypatch):
+    """budget-forcing / --extra-body / --endpoint 在这条路上没有对应能力:开跑前就退出,别烧完额度才发现。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    _fake_claude_cli(monkeypatch)
+    base = ["run", "--provider", "claude-code", "--model", "claude-opus-5", "--run-name", "bad",
+            "--sets", "syn", "--no-llm-judge"]
+    for extra in (["--mode", "budget-forcing"], ["--extra-body", '{"thinking": {}}'], ["--endpoint", mock_server]):
+        monkeypatch.setattr(sys, "argv", base + extra)
+        with pytest.raises(SystemExit) as e:
+            run_mod.main()
+        assert e.value.code == 2
+    assert not (tmp_path / "reports" / "runs" / "bad").exists()  # 早退:连目录都不该建
+
+    # 反向:openai 臂不接受 --effort(CLI 专属),缺 --endpoint 也要报错
+    monkeypatch.setattr(sys, "argv", ["run", "--model", "m", "--run-name", "bad2", "--sets", "syn",
+                                      "--no-llm-judge", "--endpoint", mock_server, "--effort", "high"])
+    with pytest.raises(SystemExit) as e:
+        run_mod.main()
+    assert e.value.code == 2
+    monkeypatch.setattr(sys, "argv", ["run", "--model", "m", "--run-name", "bad3", "--sets", "syn", "--no-llm-judge"])
+    with pytest.raises(SystemExit) as e:
+        run_mod.main()
+    assert e.value.code == 2
+
+
+def test_run_set_claude_code_budget_forcing_raises(tmp_path, monkeypatch):
+    # 绕过 CLI 直接调 run_set 也拦得住:budget forcing 要 /v1/completions 裸 prompt,CLI 给不了
+    from medforge.eval.run import run_set
+
+    _fake_claude_cli(monkeypatch)
+    with pytest.raises(SystemExit, match="budget-forcing"):
+        run_set("s", [_sample("q1", "B")], tmp_path, model="claude-opus-5", allow_llm_judge=False,
+                gen={"provider": "claude-code", "mode": "budget-forcing"})
+
+
+def test_legacy_meta_without_provider_still_resumes(tmp_path):
+    """存量 run 目录(18 个)的 run_meta.json 里没有 provider/effort:
+    「键不存在」必须读作「当年只有 openai 一条路」,否则一加指纹键就把所有存档打成不可续跑,
+    而报错文案还建议删目录=毁答卷。"""
+    from medforge.eval.run import check_protocol
+
+    legacy = {"model": "m", "max_tokens": 8192, "temperature": 0.0, "top_p": 1.0, "top_k": -1, "min_p": 0.0,
+              "presence_penalty": 0.0, "seed": 42, "prompt": "default", "prompt_sha": "abcd1234", "mode": "plain",
+              "extra_body": None, "samples": {}, "limit": 0, "thinking": "on", "llm_judge": True,
+              "git": "aaa", "created": "t1", "history": [{"git": "aaa", "created": "t1"}]}
+    (tmp_path / "run_meta.json").write_text(json.dumps(legacy), encoding="utf-8")
+    meta = {**legacy, "provider": "openai", "effort": None, "git": "bbb", "created": "t2"}
+    check_protocol(tmp_path, meta)  # 同协议续跑:放行
+    saved = json.loads((tmp_path / "run_meta.json").read_text())
+    assert saved["provider"] == "openai" and saved["effort"] is None  # 续跑时补写,只补这一次
+    assert [h["git"] for h in saved["history"]] == ["aaa", "bbb"]
+
+    # 反向:拿 claude-code 去续老目录仍然被拦——两条 provider 的作答不能混在一个目录
+    with pytest.raises(SystemExit, match="provider"):
+        check_protocol(tmp_path, {**meta, "provider": "claude-code", "effort": "high"})
+
+
+def test_legacy_default_only_fills_absent_key(tmp_path):
+    # 真记了 provider=null 的目录不是 legacy,得照旧判成不一致
+    from medforge.eval.run import check_protocol
+
+    meta = {"model": "m", "provider": None, "prompt_sha": "abcd1234", "git": "aaa", "created": "t1"}
+    check_protocol(tmp_path, meta)
+    with pytest.raises(SystemExit, match="provider"):
+        check_protocol(tmp_path, {**meta, "provider": "openai"})
+
+
+def test_claude_code_clamps_concurrency(mock_server, tmp_path, monkeypatch):
+    """每条请求是一个 CLI 进程:默认 --concurrency 16 会拉起 16 个 claude,只是排队并更快撞额度窗口。"""
+    import sys
+
+    from medforge.data import sources
+    from medforge.eval import run as run_mod
+
+    monkeypatch.setattr(sources, "ROOT", tmp_path)
+    monkeypatch.setattr(sources, "EVAL_SOURCES", {"syn": ("x", "y", "z")})
+    monkeypatch.setattr(sources, "load_source", lambda name: [_sample("q1", "B")])
+    _fake_claude_cli(monkeypatch)
+    seen: dict = {}
+    real = run_mod.run_set
+    monkeypatch.setattr(run_mod, "run_set", lambda *a, **kw: (seen.update(kw), real(*a, **kw))[1])
+    monkeypatch.setattr(sys, "argv", ["run", "--provider", "claude-code", "--model", "claude-opus-5",
+                                      "--run-name", "cc2", "--sets", "syn", "--no-llm-judge"])
+    run_mod.main()
+    assert seen["concurrency"] == run_mod.CC_MAX_CONCURRENCY == 8
+
+
+def test_effort_choices_match_cli():
+    # v2.1.252 的 `claude --help`:low, medium, high, xhigh, max——少一档就是拒绝合法配置
+    from medforge.claude.client import EFFORTS as CC_EFFORTS
+    from medforge.eval.run import EFFORTS
+
+    assert EFFORTS == CC_EFFORTS == ("low", "medium", "high", "xhigh", "max")

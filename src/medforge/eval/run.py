@@ -10,6 +10,12 @@
       --endpoint http://127.0.0.1:8000/v1 --model Qwen3.5-4B \
       --run-name base --sets cmexam,cmb-val,medxpertqa
 
+参考臂也可以走本机已登录的 Claude Code CLI(订阅额度,无需端点与 key):
+    uv run python -m medforge.eval.run --provider claude-code --model claude-opus-5 \
+      --run-name api-opus5 --sets cmexam --samples cmexam=300
+  这条路的取舍写在 docs/claude-code-provider.md:CLI 不暴露采样参数(temperature/top_p/...),
+  run_meta 里一律记 null 而不是假装设过;扩展思考文本拿不到,所以 thinking 强制记 off。
+
 产出 reports/runs/<run-name>/:
     run_meta.json         协议指纹(模型/解码参数/抽样/git):同一目录只允许一套协议
     <set>.outputs.jsonl   原始作答 + finish_reason + completion_tokens(断点续跑的依据)
@@ -69,19 +75,64 @@ FORCE_SUFFIX_CHOICE = "\n</think>\n\n答案:"
 FORCE_SUFFIX_OPEN = "\n</think>\n\n最终答案:"
 FORCE_MAX_TOKENS = 32
 MODES = ("plain", "budget-forcing")
+# 生成后端:openai = 任何 OpenAI 兼容端点(vLLM / DeepSeek / ...);claude-code = 本机已登录的 Claude Code CLI
+PROVIDERS = ("openai", "claude-code")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")  # 与 `claude --help` 对齐
+CC_MAX_CONCURRENCY = 8  # claude-code 每条请求是一个 CLI 进程:再高只是排队并更快撞订阅额度窗口
 
-# 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径
+# 一个 run 目录内必须完全一致的东西(见 check_protocol):模型、解码参数、提示词模板、抽样卷、判分口径。
+# provider/effort 必须进指纹:同一个模型名经 CLI 与经 API 拿到的作答不是一回事(采样参数不同、思考预算不同),
+# 混在一个目录里就无法解读
 PROTOCOL_KEYS = (
-    "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
-    "prompt", "prompt_sha", "mode", "extra_body", "samples", "limit", "thinking", "llm_judge",
+    "model", "provider", "effort", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty",
+    "seed", "prompt", "prompt_sha", "mode", "extra_body", "samples", "limit", "thinking", "llm_judge",
 )
+# 本次新增的键在老 run_meta.json 里根本不存在,"缺失" 必须读作「当年只有 openai 一条路」,
+# 否则 18 个存量目录会在续跑时被判成协议不一致(报错还建议删目录=毁存档)
+PROTOCOL_LEGACY_DEFAULTS = {"provider": "openai", "effort": None}
 
 
 def prompt_sha(variant: str) -> str:
     return hashlib.sha256("\n".join(PROMPTS[variant]).encode()).hexdigest()[:8]
 THINKING_MODES = {"on": True, "off": False, "auto": None}
 MAX_FAIL_RATE = 0.02  # 生成失败超过这个比例就不出表:一张 0% 的 summary 与一次成功评测在退出码上不可区分
-JUDGE_ENV = ("MEDFORGE_JUDGE_BASE_URL", "MEDFORGE_JUDGE_API_KEY", "MEDFORGE_JUDGE_MODEL")
+
+
+def _drain(todo, gen_one, outputs: dict[str, dict], f, concurrency: int) -> dict[str, dict]:
+    """并发跑 gen_one 并逐条落盘;两条 provider 路径共用,失败口径也就只有一份。
+
+    claude-code 的并发同样走这里:每次调用是一个进程 + 约 31k 缓存上下文,4~8 并发足够,
+    再高只是排队并撞订阅额度窗口。
+    """
+    lock = threading.Lock()
+    done = failed = 0
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = [pool.submit(gen_one, s) for s in todo]
+        for fut in as_completed(futures):
+            with lock:
+                done += 1
+                try:
+                    row = fut.result()
+                    if not row["output"]:
+                        # 空作答不落盘:多半是端点异常;落了盘断点续跑就永远是空的
+                        failed += 1
+                        rprint(f"  ✗ {row['id']} 空作答(finish_reason={row['finish_reason']}),留待重跑")
+                    else:
+                        outputs[row["id"]] = row
+                        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                        f.flush()
+                except Exception as e:  # noqa: BLE001  单条失败不废整卷,重跑补缺
+                    failed += 1
+                    rprint(f"  ✗ {type(e).__name__}: {e}")
+                if done % 100 == 0:
+                    rprint(f"  [{done}/{len(todo)}]")
+    f.close()
+    if failed and failed / len(todo) > MAX_FAIL_RATE:
+        # 已生成的都落盘了,重跑只补缺;但不能带着一堆 missing 出一张看起来正常的表
+        raise SystemExit(f"✗ 生成失败 {failed}/{len(todo)} 超过 {MAX_FAIL_RATE:.0%}:检查端点/参数后重跑补缺")
+    if failed:
+        rprint(f"  [yellow]! {failed} 条生成失败,已按 missing 计错;重跑可补缺[/]")
+    return outputs
 
 
 def _gen_outputs(
@@ -92,7 +143,7 @@ def _gen_outputs(
     api_key: str,
     model: str,
     concurrency: int,
-    max_tokens: int,
+    max_tokens: int | None,  # claude-code 上无处可设,记 None
     temperature: float = 0.0,
     top_p: float = 1.0,
     top_k: int = -1,
@@ -103,9 +154,19 @@ def _gen_outputs(
     mode: str = "plain",
     timeout: float = 300.0,
     extra_body: dict | None = None,
+    provider: str = "openai",
+    effort: str | None = None,
 ) -> dict[str, dict]:
-    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens", "forced"}}。"""
-    from openai import OpenAI
+    """生成作答,断点续跑:已有输出的样本跳过。返回 {id: {"output", "finish_reason", "completion_tokens", "forced"}}。
+
+    provider="claude-code" 时走本机 Claude Code CLI:没有端点/key,采样参数一概不生效(调用方负责在
+    run_meta 里记 null),finish_reason 恒为 "stop"——CLI 不暴露「写满预算」这种停止原因,
+    所以未收尾只能靠别的信号,不要把它当成端点报告的 stop。
+    """
+    if provider not in PROVIDERS:
+        raise SystemExit(f"✗ 未知 provider {provider!r},只支持 {PROVIDERS}")
+    if provider == "claude-code" and mode == "budget-forcing":
+        raise SystemExit("✗ budget-forcing 要往 /v1/completions 灌裸 prompt 续写,claude-code 给不了这个接口")
 
     outputs: dict[str, dict] = {}
     if out_file.exists():
@@ -120,12 +181,38 @@ def _gen_outputs(
     if not todo:
         return outputs
 
+    f = out_file.open("a", encoding="utf-8")
+    p_choice, p_open = PROMPTS[prompt_variant]
+
+    def render(s: Sample) -> str:
+        return (p_choice if s.is_choice else p_open).format(question=s.render_question())
+
+    if provider == "claude-code":
+        from medforge.claude.client import claude_code_query
+
+        def gen_one_cc(s: Sample) -> dict:
+            # system_prompt 留空:提示词必须与其他臂逐字相同(prompt_sha 一致),不许偷偷加系统指令
+            # retries:CLI 这条路没有 SDK 的 max_retries,一次抖动就是一条硬失败,
+            # 而 _drain 的失败率一过 MAX_FAIL_RATE 就整臂不出表
+            r = claude_code_query(
+                render(s), model=model, system_prompt="", effort=effort, timeout=timeout, retries=2
+            )
+            return {
+                "id": s.id,
+                "output": r.text,
+                # CLI 只在成功时返回结果,没有「撞上预算」这一路;记 stop 并在文档里写明它不是端点口径
+                "finish_reason": "stop",
+                # output_tokens 含扩展思考的 token,与其他臂的 completion_tokens 同义
+                "completion_tokens": r.output_tokens,
+                "forced": False,
+            }
+
+        return _drain(todo, gen_one_cc, outputs, f, concurrency)
+
+    from openai import OpenAI
+
     # timeout 按预算定:贪心复读到 32768 token 一条请求要十来分钟,300 秒会把整臂超时打成 missing
     client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=2)
-    lock = threading.Lock()
-    f = out_file.open("a", encoding="utf-8")
-
-    p_choice, p_open = PROMPTS[prompt_variant]
     # 全部无条件下发:vLLM 会拿模型自带 generation_config 当默认值,不下发 ≠ 取 1.0,
     # 而 run_meta.json 记的是这里的值——记了就得真发出去,指纹才不说谎
     sampling = {"temperature": temperature, "top_p": top_p, "presence_penalty": presence_penalty, "seed": seed}
@@ -134,7 +221,7 @@ def _gen_outputs(
     extra = {"top_k": top_k, "min_p": min_p, **(extra_body or {})}
 
     def gen_one(s: Sample) -> dict:
-        prompt = (p_choice if s.is_choice else p_open).format(question=s.render_question())
+        prompt = render(s)
         resp = client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens, extra_body=extra, **sampling,
@@ -169,34 +256,7 @@ def _gen_outputs(
             row["forced"] = True
         return row
 
-    done = failed = 0
-    with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futures = [pool.submit(gen_one, s) for s in todo]
-        for fut in as_completed(futures):
-            with lock:
-                done += 1
-                try:
-                    row = fut.result()
-                    if not row["output"]:
-                        # 空作答不落盘:多半是端点异常;落了盘断点续跑就永远是空的
-                        failed += 1
-                        rprint(f"  ✗ {row['id']} 空作答(finish_reason={row['finish_reason']}),留待重跑")
-                    else:
-                        outputs[row["id"]] = row
-                        f.write(json.dumps(row, ensure_ascii=False) + "\n")
-                        f.flush()
-                except Exception as e:  # noqa: BLE001  单条失败不废整卷,重跑补缺
-                    failed += 1
-                    rprint(f"  ✗ {type(e).__name__}: {e}")
-                if done % 100 == 0:
-                    rprint(f"  [{done}/{len(todo)}]")
-    f.close()
-    if failed and failed / len(todo) > MAX_FAIL_RATE:
-        # 已生成的都落盘了,重跑只补缺;但不能带着一堆 missing 出一张看起来正常的表
-        raise SystemExit(f"✗ 生成失败 {failed}/{len(todo)} 超过 {MAX_FAIL_RATE:.0%}:检查端点/参数后重跑补缺")
-    if failed:
-        rprint(f"  [yellow]! {failed} 条生成失败,已按 missing 计错;重跑可补缺[/]")
-    return outputs
+    return _drain(todo, gen_one, outputs, f, concurrency)
 
 
 def run_set(
@@ -204,11 +264,11 @@ def run_set(
     samples: list[Sample],
     out_dir: Path,
     *,
-    base_url: str,
+    base_url: str = "",
     api_key: str = "EMPTY",
     model: str,
     concurrency: int = 16,
-    max_tokens: int = 2048,
+    max_tokens: int | None = 2048,
     allow_llm_judge: bool = True,
     thinking: bool | None = None,
     gen: dict | None = None,
@@ -216,7 +276,8 @@ def run_set(
     """跑一套考卷,返回 scored 文件路径。判分与 DPO 构造共用 verify()——口径唯一。
 
     thinking=True 时按思考型口径:没有 </think> 即判未收尾;None 为自动(语义见 verifier.split_answer)。
-    gen 是解码参数(temperature/top_p/top_k/presence_penalty/seed/prompt_variant/mode),缺省即 v2 贪心。
+    gen 是解码参数(temperature/top_p/top_k/presence_penalty/seed/prompt_variant/mode),缺省即 v2 贪心;
+    gen["provider"]="claude-code" 时走本机 CLI,base_url/api_key 都不用给。
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     rprint(f"[bold]▶ {name}[/]({len(samples)} 题)")
@@ -280,9 +341,17 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
     stamp = {"git": meta.get("git"), "created": meta.get("created")}
     if meta_file.exists():
         old = json.loads(meta_file.read_text(encoding="utf-8"))
-        diff = {k: (old.get(k), meta.get(k)) for k in PROTOCOL_KEYS if old.get(k) != meta.get(k)}
+
+        def val(d: dict, k: str):
+            # 只在「键不存在」时补默认:真记了 provider=null 的目录仍然算不一致。
+            # 两侧都补,新老 meta 才是同一把尺子(旧目录 + 老口径调用方都读作 openai)
+            return d.get(k, PROTOCOL_LEGACY_DEFAULTS.get(k))
+
+        diff = {k: (val(old, k), val(meta, k)) for k in PROTOCOL_KEYS if val(old, k) != val(meta, k)}
         if diff:
             raise SystemExit(f"✗ {out_dir.name} 已按另一套协议落过盘 {diff};换 --run-name 或删掉目录")
+        for k, v in PROTOCOL_LEGACY_DEFAULTS.items():
+            old.setdefault(k, v)  # 顺手补写,老目录只补这一次
         old.setdefault("history", []).append(stamp)
         meta_file.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
         return
@@ -299,8 +368,8 @@ def check_protocol(out_dir: Path, meta: dict, *, adopt_legacy: bool = False) -> 
 
 def protocol_line(meta: dict) -> str:
     keys = (
-        "model", "max_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed",
-        "prompt", "prompt_sha", "mode", "extra_body", "thinking", "llm_judge", "git",
+        "model", "provider", "effort", "max_tokens", "temperature", "top_p", "top_k", "min_p",
+        "presence_penalty", "seed", "prompt", "prompt_sha", "mode", "extra_body", "thinking", "llm_judge", "git",
     )
     parts = [f"{k}={meta.get(k)}" for k in keys]
     parts.append("抽样=" + (",".join(f"{k}={v}" for k, v in meta["samples"].items()) if meta.get("samples") else "全量"))
@@ -315,7 +384,15 @@ def main() -> None:
 
     load_env()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--endpoint", required=True, help="OpenAI 兼容 base_url,如 http://127.0.0.1:8000/v1")
+    ap.add_argument(
+        "--provider", choices=PROVIDERS, default="openai",
+        help="生成后端:openai = OpenAI 兼容端点(默认);claude-code = 本机已登录的 Claude Code CLI(订阅额度,无需端点与 key)",
+    )
+    ap.add_argument("--endpoint", default="", help="OpenAI 兼容 base_url,如 http://127.0.0.1:8000/v1(provider=openai 必填)")
+    ap.add_argument(
+        "--effort", choices=EFFORTS, default=None,
+        help="claude-code 的扩展思考预算档位(默认 high);provider=openai 时不可用",
+    )
     ap.add_argument("--model", required=True)
     ap.add_argument("--run-name", required=True, help="如 base / sft / sft-dpo")
     ap.add_argument("--sets", default=",".join(EVAL_SOURCES))
@@ -357,9 +434,12 @@ def main() -> None:
         k, _, v = kv.partition("=")
         sample_map[k.strip()] = int(v)
 
-    # fail-fast:judge 没配时 verify_by_llm 只会静默弃权,弃权计错——整卷分数无声塌一半
+    # fail-fast:judge 没配时 verify_by_llm 只会静默弃权,弃权计错——整卷分数无声塌一半。
+    # 需要哪些变量取决于 MEDFORGE_JUDGE_PROVIDER(claude-code 只要 _MODEL),判分侧说了算
     if not args.no_llm_judge:
-        missing = [k for k in JUDGE_ENV if not os.environ.get(k)]
+        from medforge.verify.verifier import missing_judge_env
+
+        missing = missing_judge_env()
         if missing:
             rprint(f"[red]✗ LLM 兜底已启用但 judge 未配置: {missing};配好 .env 或显式 --no-llm-judge[/]")
             sys.exit(2)
@@ -369,18 +449,52 @@ def main() -> None:
         "presence_penalty": args.presence_penalty, "seed": args.seed,
         "prompt_variant": args.prompt, "mode": args.mode, "timeout": args.timeout,
         "extra_body": json.loads(args.extra_body) if args.extra_body else None,
+        "provider": args.provider, "effort": args.effort,
     }
+    max_tokens, thinking = args.max_tokens, args.thinking
+    if args.provider == "claude-code":
+        # 三件事在 CLI 上没有对应开关,早退比跑到一半发现便宜
+        if args.mode == "budget-forcing":
+            rprint("[red]✗ budget-forcing 要往 /v1/completions 灌裸 prompt 续写,claude-code 没有这个接口;"
+                   "用 --provider openai 或 --mode plain[/]")
+            sys.exit(2)
+        if args.extra_body:
+            rprint("[red]✗ --extra-body 是 OpenAI 兼容端点的透传参数,claude-code 不认;去掉它[/]")
+            sys.exit(2)
+        if args.endpoint:
+            rprint("[red]✗ claude-code 不走端点,--endpoint 会让协议指纹说谎;去掉它[/]")
+            sys.exit(2)
+        gen["effort"] = gen["effort"] or "high"
+        if args.concurrency > CC_MAX_CONCURRENCY:
+            rprint(f"[yellow]! claude-code 每条请求是一个 CLI 进程,并发 >{CC_MAX_CONCURRENCY} 只会排队"
+                   f"并更快撞额度窗口,已降到 {CC_MAX_CONCURRENCY}[/]")
+            args.concurrency = CC_MAX_CONCURRENCY
+        # CLI 不暴露采样旋钮与 max_tokens:记 null 而不是记一个没发出去的数字——指纹不许说谎
+        gen.update(dict.fromkeys(("temperature", "top_p", "top_k", "min_p", "presence_penalty", "seed")))
+        max_tokens = None
+        if thinking != "off":
+            # CLI 的 JSON 结果只有最终答案、没有思考流,存档里永远没有 </think>;
+            # 按 on 记账会把每一题都判成未收尾。思考确实开着(由 effort 控预算),但守卫口径必须是 off
+            rprint(f"[yellow]! claude-code 拿不到思考流(结果里没有 </think>),--thinking {thinking} → off[/]")
+            thinking = "off"
+    else:
+        if not args.endpoint:
+            rprint("[red]✗ provider=openai 需要 --endpoint[/]")
+            sys.exit(2)
+        if args.effort is not None:
+            rprint("[red]✗ --effort 只对 --provider claude-code 有意义[/]")
+            sys.exit(2)
     api_key = os.environ.get(args.api_key_env, "") if args.api_key_env else "EMPTY"
     if args.api_key_env and not api_key:
         rprint(f"[red]✗ 环境变量 {args.api_key_env} 为空(.env 已加载)[/]")
         sys.exit(2)
     meta = {
-        "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint,
-        "max_tokens": args.max_tokens, **{k: v for k, v in gen.items() if k not in ("prompt_variant", "timeout")},
+        "run_name": args.run_name, "model": args.model, "endpoint": args.endpoint or None,
+        "max_tokens": max_tokens, **{k: v for k, v in gen.items() if k not in ("prompt_variant", "timeout")},
         "extra_body": json.dumps(gen["extra_body"], ensure_ascii=False, sort_keys=True) if gen["extra_body"] else None,
         "prompt": args.prompt, "prompt_sha": prompt_sha(args.prompt),
         "samples": sample_map, "limit": args.limit,
-        "thinking": args.thinking, "llm_judge": not args.no_llm_judge,
+        "thinking": thinking, "llm_judge": not args.no_llm_judge,
         "git": git_describe(ROOT), "created": datetime.now(UTC).astimezone().isoformat(timespec="seconds"),
     }
     out_dir = ROOT / "reports" / "runs" / args.run_name
@@ -397,8 +511,8 @@ def main() -> None:
         scored = run_set(
             name.strip(), samples, out_dir,
             base_url=args.endpoint, api_key=api_key, model=args.model,
-            concurrency=args.concurrency, max_tokens=args.max_tokens,
-            allow_llm_judge=not args.no_llm_judge, thinking=THINKING_MODES[args.thinking], gen=gen,
+            concurrency=args.concurrency, max_tokens=max_tokens,
+            allow_llm_judge=not args.no_llm_judge, thinking=THINKING_MODES[thinking], gen=gen,
         )
         tables.append((name.strip(), load_run(scored, args.run_name)))
 

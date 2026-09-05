@@ -1,5 +1,9 @@
 """蒸馏 2.0:强老师(DeepSeek V4)在去污染题池上出题解 → 本项目验证器筛 → ms-swift SFT 教材。
 
+教师只能是 DeepSeek 这类允许蒸馏的 provider(其条款 §4.2 明确许可),**不得**换成
+MEDFORGE_JUDGE_PROVIDER=claude-code:Anthropic 消费者条款禁止用 Claude 输出训练其他模型。
+判卷/代理标注/参考臂可以用 Claude(那是测量,不是训练),见 docs/claude-code-provider.md。
+
 两步 CLI(采样与构造分离:采样按次付费且要断点续采,构造要能反复重跑调闸门):
 
     # 1. 采样(唯一花钱的一步)
