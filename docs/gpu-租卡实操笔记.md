@@ -131,7 +131,7 @@ completion 里根本没有 `</think>`,奖励插件按「未收尾」全判 -1、
 `build_grpo --samples data/processed/abstain_samples.jsonl`:从弃权阶段的自采样里挑「4 次对 1~3 次」的题
 (正是 build_abstain 整类丢掉的 unstable,没被任何阶段训过),4000 题里筛出 912 道,100 道作 eval、812 道作训练。
 
-**8 个单卡坑,每个都换一次重启(全部已写进 `configs/grpo_qwen35_4b_lora.yaml` 的注释)。**
+**8 个单卡坑,每个都换一次重启。**(1~7 的定论随 GRPO 配置一起合入 `configs/grpo_qwen35_4b_lora.yaml` 的注释;8 属于第二阶段,已经在 `configs/sft_abstain_qwen35_4b_lora.yaml`。)
 
 1. Qwen3.5 的 Gated-DeltaNet/Mamba 层按 seq 预分配 cache:`vllm_gpu_memory_utilization 0.4` 下
    `max_num_seqs (128) exceeds available Mamba cache blocks (121)` → `vllm_max_num_seqs: 32`。

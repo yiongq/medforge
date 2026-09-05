@@ -115,7 +115,13 @@ def pick_slice(pool: list[Sample], skip: int, n: int, seed: int = SEED) -> list[
 
 
 def count_correct(sample: Sample, rows: list[dict]) -> int:
-    """一道题的自采样里,规则层判对的条数。与 build_abstain 逐条同口径,不另起一套判分。
+    """一道题的自采样里,规则层判对的条数。
+
+    与 build_abstain 共用同一把尺的**收尾判定 + 规则层**(严格可用协议 v3),不另起一套判分;
+    但**不套用**它那条「答卷里出现多个 </think> 就整条丢」(SAMPLE_GATES 的 double_close)——
+    那道闸是为教材行的标签成对性写的(教材要把 <think>…</think> 原样喂给 SFT),难度筛选只数判对数,
+    split_answer 取最后一个 </think> 之后的段落已经够用。实测全库 4000 题 × 4 条里仅 1 条命中这条闸,
+    影响面是一道题:两边口径在此之外逐条一致。
 
     严格可用协议 v3 的规则层:先 split_answer(thinking=True)切出最后一个 </think> 之后的作答段;
     未收尾(finish_reason=length,或思考型输出里根本没有 </think>)直接不算对——**不进规则层**。
@@ -245,6 +251,12 @@ def _run_unstable(args, pool: list[Sample]) -> int:
             f"[red]✗ 没有一道题的判对数落在 [{args.min_correct}, {max_correct}]:"
             f"确认 --k 与采样时的 K 一致、题池 --source 与采样文件对得上[/red]"
         )
+        return 2
+
+    # eval_n 不设闸的话:负数会把训练集切成 shuffled[-3:] 这种残段、又因为 `eval_n > 0` 不落 eval 文件,
+    # 超量则写出空训练题单——两种都返回 0、漏斗还打得挺像样,要到租卡机上 ms-swift 加载数据集才炸。
+    if not 0 <= args.eval_n < len(picked):
+        rprint(f"[red]✗ --eval-n 必须落在 [0, {len(picked)}) 内(unstable 题数),收到 {args.eval_n}[/red]")
         return 2
 
     train, ev = split_train_eval(picked, args.eval_n, args.seed)

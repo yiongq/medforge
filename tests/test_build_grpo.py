@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from medforge.data import build_grpo as bg
 from medforge.data.build_distill import pick_questions, render_prompt
 from medforge.data.schema import Sample
@@ -413,3 +415,62 @@ def test_cli_unstable_mode_empty_selection_returns_2(tmp_path):
         ]
     )
     assert rc == 2
+
+
+def test_split_shuffle_matches_the_permutation_that_shipped():
+    """把排列本身钉死:换成 random.Random(seed).sample(...) 或把 eval 取到尾部,都能过掉
+    「跑两次结果一样」那类自比测试,却复现不出已经上过机的 812/100 那份题单。
+    期望值是 random.Random(42).shuffle 在 10 个元素上的真实结果,手算于测试之外。"""
+    picked = _hard_pool(10)
+    train, ev = bg.split_train_eval(picked, 3, seed=42)
+    assert [s.id for s in ev] == ["cmexam-train-7", "cmexam-train-3", "cmexam-train-2"]
+    assert [s.id for s in train] == [
+        "cmexam-train-8",
+        "cmexam-train-5",
+        "cmexam-train-6",
+        "cmexam-train-9",
+        "cmexam-train-4",
+        "cmexam-train-0",
+        "cmexam-train-1",
+    ]
+
+
+def test_unstable_order_is_samples_file_first_seen_order():
+    """洗牌的输入序也要钉死:采样文件是并发落盘的,id 顺序既不是题池序也不是字典序。
+    这里把三者错开——题池 0,1,2,采样文件 2,0,1——换成 sorted() 或按题池遍历就会当场露馅,
+    而洗牌吃的是这个顺序,顺序一变,train/eval 的切分跟着变。"""
+    pool = _hard_pool(3)
+    rows: list[dict] = []
+    for i in (2, 0, 1):
+        rows += _rows_for(f"cmexam-train-{i}", ["B", "A", "B", "A"])
+    rows_by_id: dict[str, list[dict]] = {}
+    for r in rows:
+        rows_by_id.setdefault(r["id"], []).append(r)
+    picked, _, _ = bg.select_unstable(pool, rows_by_id, k=4)
+    assert [s.id for s in picked] == ["cmexam-train-2", "cmexam-train-0", "cmexam-train-1"]
+
+
+def _unstable_argv(tmp_path, pool_file, samples_file, eval_n: str) -> list[str]:
+    return [
+        "--pool",
+        str(pool_file),
+        "--samples",
+        str(samples_file),
+        "--eval-n",
+        eval_n,
+        "--out",
+        str(tmp_path / "o.jsonl"),
+        "--eval-out",
+        str(tmp_path / "e.jsonl"),
+    ]
+
+
+@pytest.mark.parametrize("eval_n", ["-3", "4"])
+def test_cli_unstable_mode_rejects_out_of_range_eval_n(tmp_path, eval_n):
+    """负数会把训练集切成残段还不落 eval 文件,超量会写出空训练题单——两种都得当场退 2,
+    否则要到租卡机上 ms-swift 加载数据集时才发现题单是空的/只剩几行。"""
+    pool_file = _write_pool(tmp_path, _hard_pool(4))
+    rows = [r for i in range(4) for r in _rows_for(f"cmexam-train-{i}", ["B", "A", "B", "A"])]
+    rc = bg.main(_unstable_argv(tmp_path, pool_file, _write_samples(tmp_path, rows), eval_n))
+    assert rc == 2
+    assert not (tmp_path / "o.jsonl").exists()
