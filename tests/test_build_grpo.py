@@ -11,6 +11,7 @@ from medforge.data import build_grpo as bg
 from medforge.data.build_distill import pick_questions, render_prompt
 from medforge.data.schema import Sample
 from medforge.eval.run import PROMPT_CHOICE
+from medforge.train import grpo_reward as gr
 
 POOL_SIZE = 60
 SKIP = 20
@@ -54,8 +55,17 @@ def test_row_columns_match_reward_kwargs():
     row = bg.to_grpo_row(s)
     assert set(row) == {"messages", "solution", "options", "id"}
     assert row["solution"] == "B"
-    assert row["options"] == {"A": "甲", "B": "乙", "C": "丙", "D": "丁"}
     assert row["id"] == "cmexam-train-1"
+
+
+def test_options_is_a_json_string_not_a_struct():
+    """必须是字符串:HF datasets 的 json builder 跨 block 不合并 struct 字段,选项数不齐的题
+    会让整份数据集在加载期 `Couldn't cast ... struct<A..F>` 直接失败(见 to_grpo_row 注释)。
+    奖励侧 grpo_reward._clean_options 本来就吃 JSON 字符串。"""
+    row = bg.to_grpo_row(_pool(2)[1])
+    assert isinstance(row["options"], str)
+    assert json.loads(row["options"]) == {"A": "甲", "B": "乙", "C": "丙", "D": "丁"}
+    assert gr._clean_options(row["options"]) == {"A": "甲", "B": "乙", "C": "丙", "D": "丁"}
 
 
 def test_gold_letters_normalizes_multi_answer():

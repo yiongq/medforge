@@ -13,13 +13,13 @@
 #     log_completions                                        swift/arguments/rlhf_args.py  GRPOArguments
 #   epsilon / epsilon_high / overlong_filter /
 #     num_generations_eval                                   swift/rlhf_trainers/args_mixin.py  GRPOArgumentsMixin
-#   use_vllm / vllm_mode / top_p / sleep_level /
+#   use_vllm / vllm_mode / top_p / top_k / min_p / sleep_level /
 #     offload_model / offload_optimizer / lora_rank          swift/rlhf_trainers/args_mixin.py  RolloutTrainerArgumentsMixin
 #   vllm_gpu_memory_utilization / vllm_max_model_len         swift/rlhf_trainers/args_mixin.py  VllmArguments
 #   external_plugins / tuner_type / seed                     swift/arguments/base_args/base_args.py  BaseArguments
 #   dataset / val_dataset                                    swift/arguments/base_args/data_args.py  DataArguments
 #   model / torch_dtype                                      swift/arguments/base_args/model_args.py  ModelArguments
-#   max_length                                               swift/arguments/base_args/template_args.py  TemplateArguments
+#   max_length / enable_thinking                             swift/arguments/base_args/template_args.py  TemplateArguments
 #   target_modules / lora_alpha / lora_dropout               swift/arguments/tuner_args.py  TunerArguments
 #   learning_rate / eval_strategy / output_dir               swift/arguments/sft_args.py  SftArguments
 #   swanlab_project / swanlab_mode                           swift/arguments/sft_args.py  SwanlabArguments
@@ -56,26 +56,55 @@ dataset: data/processed/grpo_train.jsonl      # medforge.data.build_grpo --skip 
 val_dataset: data/processed/grpo_eval.jsonl   # 同一次 build 的 --eval-n 200,与训练段不重叠
 
 # 一次 rollout 出 8 个解:GRPO 的优势是组内标准化出来的,组太小(< 4)优势噪声压不住。
-# generation_batch_size = per_device_train_batch_size × world_size × gradient_accumulation_steps
-#   = 8 × 1 × 2 = 16 个 prompt,必须能被 num_generations 整除(args_mixin._init_generation_batch_params),
-#   16 % 8 == 0 ✓;每步实际前向 16 × 8 = 128 条 completion
+# 注意 generation_batch_size 数的是 completion 总数而不是题数(args_mixin.py:154 的原话:
+# "The total number of samples generated in one vLLM inference call"),唯一题数 = 它 / num_generations
+# —— RepeatSampler 就是按 generation_batch_size // num_generations 取题的(grpo_trainer.py:177)。
+#   generation_batch_size = per_device_train_batch_size × world_size × gradient_accumulation_steps
+#                         = 8 × 1 × 16 = 128 条 completion = 16 道题 × 8 个解 / 每次优化器更新,
+#   分成 16 个 micro-batch(每批 8 条 completion)前向,所以显存压力只由 per_device_train_batch_size 决定。
+# 这里必须是 16 而不是 2:grad_accum=2 时 generation_batch_size = 8×1×2 = 16,每次更新只有 16/8 = 2 道题,策略梯度被两组基线主导,
+# 是 GRPO 能配出来的最噪的一档。128 也满足 128 % num_generations == 0(_init_generation_batch_params 的硬校验)。
+# 代价是每步要生成 128 条:300 步 × 128 ≈ 3.8 万条 rollout(而 grad_accum=2 时只有 4800 条),
+# 单卡上这是数十小时量级的租金,先用 max_steps: 10 跑一轮量出每步耗时再决定 300 是不是跑得完。
+# 题量上 300 步 × 16 题 ≈ 4800 题,正好把 build_grpo 的 6000 题吃掉八成(不到一轮)。
 num_generations: 8
 per_device_train_batch_size: 8
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 16
 
 # 4096:CMExam-train 的答卷在蒸馏模型下中位 ≈ 420 token、p90 ≈ 4.7k(reports/usability-v3-train.md 的
-# 「每题 token 均值 1.8k」是三卷混合值,CMExam 单卷更短)。给到 4096 覆盖住九成,再长的靠 overlong_filter
-# 排掉而不是罚分——被长度截断的答卷不该被当成「答错」记进优势,否则等于教模型写得更短而不是更准
+# 「每题 token 均值 1.8k」是三卷混合值,CMExam 单卷更短)。给到 4096 覆盖住九成。
 max_completion_length: 4096
 max_length: 8192              # prompt 侧上限,与 SFT 一致
 vllm_max_model_len: 12288     # prompt + completion 的硬上限,留出余量
+# overlong_filter 在 4.5.2 里只做一件事:把截断样本的 token 从 completion_mask 里抹掉
+# (grpo_trainer.py:978,发生在 compute_loss 里)。奖励与优势在这之前就算完了(grpo_trainer.py:244),
+# 所以被截断的那一成答卷照样拿 UNFINISHED_REWARD=-1 并进组内均值/标准差,只是自己不贡献 loss。
+# 这是刻意的,不是漏网:见 src/medforge/train/grpo_reward.py 的模块注释——「写不完」必须不比「答错」便宜,
+# 否则模型会发现转圈到撞上限是最省事的逃生门(W2 实测过 DPO 的这个退化方向)。
+# 若哪天改主意认为截断不该带信号,就把 MEDFORGE_GRPO_UNFINISHED_REWARD 设成 0(与弃权同为基线中性),
+# 而不是指望 overlong_filter 替你把 -1 从优势里摘掉。
 overlong_filter: true
 
-# 采样参数照抄 Qwen3.5 官方思考模式(评测 sample 臂也是这一套),训练与考卷的解码分布不能漂
+# 解码尽量对齐评测 sample 臂(scripts/eval_p2_arms.sh 的 --temperature 1.0 --top-p 0.95 --top-k 20
+# --min-p 0 --presence-penalty 1.5):训练与考卷的分布漂了,涨的分在考卷上兑不出来。
+# top_k / min_p 必须显式写:RolloutTrainerArgumentsMixin 的默认是 top_k=-1(不截断)、min_p=0.0,
+# 而 rollout 的 RequestConfig 恰好逐字段读这几个 arg(rollout_mixin.py:356)。
+# 残留差异一条,说清楚不遮掩:presence_penalty 在 4.5.2 里没有对应的 rollout 参数
+# (RequestConfig 有这个字段,但 RolloutTrainerArgumentsMixin 里没有可以填它的 arg,只有 repetition_penalty),
+# 所以评测臂那份 1.5 的存在惩罚在训练侧无法复现,训练分布比考卷略松。
 temperature: 1.0
 top_p: 0.95
+top_k: 20
+min_p: 0
+# 必须显式打开思考:qwen3_5 模板的 non_thinking_prefix 非空,而 Template.__init__ 的默认解析是
+# `enable_thinking = is_thinking and not non_thinking_prefix`(swift/template/base.py:130)→ 默认 False。
+# 那样 rollout 会被塞进 '<think>\n\n</think>\n\n' 前缀且该前缀不在 completion 文本里,
+# 于是每条 completion 都没有 </think>,medforge_selective 会按「未收尾」全判 -1、组内零方差、300 步白烧。
+enable_thinking: true
 
-# beta = 0 → 不加载参考模型,单卡省下一整份 4B 权重,也不惩罚偏离 SFT 分布。
+# beta = 0 → 省掉参考前向和 KL 项,也不惩罚偏离 SFT 分布。
+# (注意:LoRA 本来就不会再加载一份权重——ms-swift 只在 tuner_type=full 时才建 ref_model,
+#  rlhf_args.py:291-298;beta=0.04 时参考 logprob 是同一份权重关掉 adapter 算的。省的是算力不是显存。)
 # 代价是可能跑飞(格式退化 / 复读),所以 log_completions 开着,前 50 步要看采样样例。
 # 如果观察到格式崩坏,改 0.04(TRL/ms-swift 的常用值)重跑,别调 lr。
 beta: 0.0

@@ -51,7 +51,7 @@ PY
 #       实测降到不认 qwen3_5 架构的旧 transformers)。这里是那条规矩唯一必须破例的地方,所以:
 #      装之前打印版本、装之后再打印一次,并显式验证 transformers 仍认得 qwen3_5;不认就当场中止,
 #      因为此时训练能起来但模型架构解析已经坏了,错误会推迟到加载权重时才炸(甚至更晚)。
-versions() {  # $1 = 说明文字。装 vllm 前后各打一次,回看日志时才知道解析器把谁动了
+versions() {  # $1 = 说明文字。装 vllm 前后各打一次,回看日志时才知道解析器把谁动了(没装也打 final)
   "$SWIFT_PY" -c '
 import sys
 out = []
@@ -75,10 +75,13 @@ else
   UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple" \
     "$UV" pip install --python "$SWIFT_PY" ${TORCH_BACKEND:+--torch-backend=$TORCH_BACKEND} "vllm==$VLLM_VERSION" || {
       echo "✗ vllm 装不进训练 venv;驱动只到 CUDA 12.x 时按笔记加 --extra-index-url https://wheels.vllm.ai/$VLLM_VERSION/cu129 TORCH_BACKEND=cu129"; exit 2; }
-  versions "after"
-  # 硬闸:transformers 被 vllm 拖降到不认 qwen3_5 就地中止。比版本号比较可靠——
-  # 真正要的是「架构解析得动」,而不是某个版本区间(笔记里翻车那次版本号看着也正常)
-  "$SWIFT_PY" - <<'PY' || { echo "✗ transformers 被降级到不认 qwen3_5:回滚 venv(重跑 scripts/setup_train_env.sh)再议"; exit 2; }
+fi
+# 硬闸放在 if/else 之外无条件跑:要防的就是「上一次运行把 venv 装坏了」。那种情况下第二次运行
+# (SKIP_TRAIN=1 重新合并 / OOM 后重试 / 手工补评测)import vllm 是成功的,闸门若写在 else 里就整段跳过,
+# 脚本会带着已经坏掉的 transformers 一路跑到加载权重才炸。检查本身零成本(import + 查个字典)。
+# 比版本号比较可靠——真正要的是「架构解析得动」,而不是某个版本区间(笔记里翻车那次版本号看着也正常)
+versions "final"
+"$SWIFT_PY" - <<'PY' || { echo "✗ transformers 不认 qwen3_5(多半是装 vllm 时被连锁降级):重跑 scripts/setup_train_env.sh"; exit 2; }
 import sys
 import transformers
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
@@ -86,9 +89,8 @@ ok = "qwen3_5" in CONFIG_MAPPING_NAMES
 print(f"transformers={transformers.__version__} 认识 qwen3_5: {ok}")
 sys.exit(0 if ok else 1)
 PY
-  "$SWIFT_PY" -c "import swift, trl; print('swift', swift.__version__, 'trl', trl.__version__)" \
-    || { echo "✗ 装完 vllm 后 ms-swift/trl 反而 import 不动了:回滚 venv"; exit 2; }
-fi
+"$SWIFT_PY" -c "import swift, trl; print('swift', swift.__version__, 'trl', trl.__version__)" \
+  || { echo "✗ ms-swift/trl 在训练 venv 里 import 不动:回滚 venv(重跑 scripts/setup_train_env.sh)"; exit 2; }
 "$UV" pip freeze --python "$SWIFT_PY" > "reports/train-env-freeze-$(date +%Y%m%d).txt" 2>/dev/null || true
 
 # 1) 训练。前 50 步必看 completions 采样(log_completions: true):beta=0 不带参考模型,
@@ -123,15 +125,21 @@ RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" smoke,sample
 echo "== [4/4] eval(弃权提示词)$(date +%T) =="
 PORT="${PORT:-8000}"
 SETS="${SETS:-cmexam,cmb-val,medxpertqa}"
+# seed 与 eval_p2_arms.sh 取同一个默认值和同一套 run 名后缀(那边 SEED=42 时不加后缀):
+# 否则 SEED=43 时 A 臂是 seed 43、B 臂硬编码 42,两条臂差的就不止提示词一个变量了,run 名上还看不出来。
+SEED="${SEED:-42}"
+SEED_SUFFIX=""; [ "$SEED" != "42" ] && SEED_SUFFIX="-s$SEED"
 uv run python -m medforge.eval.run \
   --endpoint "http://127.0.0.1:$PORT/v1" --model "$PREFIX" --sets "$SETS" \
   --samples cmexam=2000,medxpertqa=1000 --concurrency 32 \
-  --run-name "$PREFIX-v3-abstain" --prompt abstain \
+  --run-name "$PREFIX-v3-abstain$SEED_SUFFIX" --prompt abstain \
   --temperature 1.0 --top-p 0.95 --top-k 20 --min-p 0 --presence-penalty 1.5 \
-  --max-tokens 32768 --seed 42 > "logs/$PREFIX-v3-abstain.log" 2>&1 \
-  || { echo "✗ 弃权臂失败"; tail -20 "logs/$PREFIX-v3-abstain.log"; exit 1; }
-grep -v "^\[normalize\]" "logs/$PREFIX-v3-abstain.log" | tail -6
+  --max-tokens 32768 --seed "$SEED" > "logs/$PREFIX-v3-abstain$SEED_SUFFIX.log" 2>&1 \
+  || { echo "✗ 弃权臂失败"; tail -20 "logs/$PREFIX-v3-abstain$SEED_SUFFIX.log"; exit 1; }
+grep -v "^\[normalize\]" "logs/$PREFIX-v3-abstain$SEED_SUFFIX.log" | tail -6
 
 pkill -f "vllm serv[e]" 2>/dev/null || true
 echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-{sample,abstain}/;把小文件 rsync 回本地再关机"
-[ "${SHUTDOWN:-0}" = "1" ] && { sync; shutdown; }
+# 写成 if 而不是 `[ ... ] && { ... }`:后者在不关机时返回 1,又是脚本最后一条命令,
+# set -e 下会让一次成功的训练以退出码 1 收尾,外层 `bash train_grpo.sh && rsync ...` 全被判成失败。
+if [ "${SHUTDOWN:-0}" = "1" ]; then sync; shutdown; fi

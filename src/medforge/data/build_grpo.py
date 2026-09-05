@@ -10,7 +10,10 @@ GRPO 不需要教材,只需要「题 + 标准答案」——奖励由 medforge �
 产出 data/processed/grpo_train.jsonl(以及 --eval-n > 0 时的 grpo_eval.jsonl),每行:
 
     {"messages": [{"role": "user", "content": <与评测完全同一份提示词>}],
-     "solution": "AC", "options": {"A": "...", ...}, "id": "cmexam-train-123"}
+     "solution": "AC", "options": "{\\"A\\": \\"...\\", ...}", "id": "cmexam-train-123"}
+
+  (options 落盘成 **JSON 字符串**而不是 JSON 对象,理由见 to_grpo_row 的注释:HF datasets 的 json
+   builder 跨 block 不合并 struct 字段,选项数不齐的题会让整份数据集在加载期直接 cast 失败。)
 
 三条设计约束:
 
@@ -77,11 +80,19 @@ def pick_slice(pool: list[Sample], skip: int, n: int, seed: int = SEED) -> list[
 
 
 def to_grpo_row(sample: Sample) -> dict:
-    """ms-swift GRPO 一行。messages 只有 user——completion 由 rollout 现场生成,不存在 assistant 侧。"""
+    """ms-swift GRPO 一行。messages 只有 user——completion 由 rollout 现场生成,不存在 assistant 侧。
+
+    options 存成 JSON 字符串是必须的,不是风格选择:ms-swift 用 hf_load_dataset("json", ...) 读
+    (swift/dataset/loader.py:58),HF datasets 的 json builder 按约 10 MB 分块读,后一块出现前一块没有的
+    struct 字段时不做 union 而是直接 `TypeError: Couldn't cast ... struct<A..F>`。CMExam 的选项键集合并不固定
+    (normalize.py 会丢掉空选项,cmb-val 里实测有六选项题),6000 题的 jsonl 又正好落在这个体积带上——
+    存成对象的话,炸不炸取决于洗牌后哪道多选项题排在第几行,本地永远测不出来,只在租卡机启动时随机翻车。
+    存成字符串则列类型恒为 string,与选项数无关。奖励侧无需改动:grpo_reward._clean_options 接受 JSON 字符串。
+    """
     return {
         "messages": [{"role": "user", "content": render_prompt(sample)}],
         "solution": gold_letters(sample),
-        "options": dict(sample.options or {}),
+        "options": json.dumps(dict(sample.options or {}), ensure_ascii=False),
         "id": sample.id,
     }
 

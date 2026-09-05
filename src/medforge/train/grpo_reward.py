@@ -40,8 +40,10 @@ ms-swift 4.5.2 的加载路径(读 wheel 源码核对过,不是猜的):
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import warnings
 from pathlib import Path
 
 # ms-swift 用 import_external_file 顶层导入本文件,而 medforge 未必装进了训练 venv
@@ -52,7 +54,7 @@ if __package__ in (None, ""):  # pragma: no cover - 仅在 ms-swift 侧的顶层
         sys.path.insert(0, str(_SRC))
 
 from medforge.verify.extract import extract
-from medforge.verify.verifier import split_answer
+from medforge.verify.verifier import THINK_END, split_answer
 
 CORRECT_REWARD = 1.0
 ABSTAIN_REWARD = 0.0
@@ -88,8 +90,6 @@ def _clean_options(options: object) -> dict[str, str] | None:
     另外允许 options 是 JSON 字符串,方便手工造数据集时偷懒。
     """
     if isinstance(options, str):
-        import json
-
         try:
             options = json.loads(options)
         except ValueError:
@@ -164,13 +164,30 @@ class MedforgeSelectiveReward(_ORM):
             return value + [None] * (n - len(value)) if len(value) < n else value
         return [value] * n
 
+    def _score_safely(self, *args, **kwargs) -> float:
+        """奖励函数抛一次异常就带走整个已付费的 run(compute_rewards_per_func 不捕获),
+        所以任何畸形输入都只赔一条样本的分,不赔整场训练。"""
+        try:
+            return score_one(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - 见 docstring:宁可给错分也不能让 run 挂掉
+            warnings.warn(
+                f"medforge_selective: 单条打分异常({type(exc).__name__}: {exc}),按未收尾计", stacklevel=2
+            )
+            return self.unfinished
+
     def __call__(self, completions, solution=None, options=None, finish_reason=None, **kwargs) -> list[float]:
+        if solution is None:
+            # 整列缺失(列改名 / 手写 jsonl / 未来 preprocessor 变动)时每条都会判「无金标」= -1,
+            # 组内零方差 → 优势恒 0 → 300 步烧完卡而没有任何梯度,且日志里一句错都不会有。宁可起步就炸。
+            raise ValueError(
+                "medforge_selective: 数据集缺 solution 列,GRPO 拿不到金标、产生不了信号(见 medforge.data.build_grpo)"
+            )
         n = len(completions)
         sols = self._column(solution, n)
         opts = self._column(options, n)
         fins = self._column(finish_reason, n)
-        return [
-            score_one(
+        rewards = [
+            self._score_safely(
                 completions[i],
                 sols[i],
                 opts[i],
@@ -182,6 +199,18 @@ class MedforgeSelectiveReward(_ORM):
             )
             for i in range(n)
         ]
+        # 防呆:整批一条 </think> 都没有 = 模板退回了非思考模式(qwen3_5 的 enable_thinking 默认解析成
+        # False,见配置里的注释)。那样每条都判「未收尾」、组内零方差、优势恒 0,却不报错也不掉指标,
+        # log_completions 的样例还看着挺正常(模型确实在答题,只是没思考)—— 必须在前几步日志里能看见。
+        # 判据用「没有 </think>」而不是「奖励全 = unfinished」:wrong 与 unfinished 默认同为 -1,
+        # 后者会把一批全答错也误报成模板故障,喊狼喊多了就没人看了。
+        if rewards and not any(THINK_END in c for c in completions if isinstance(c, str)):
+            warnings.warn(
+                "medforge_selective: 整批 completion 里没有一个 </think>,奖励全部按「未收尾」计。"
+                "先检查配置里的 enable_thinking 是否为 true(非思考模式下前缀不在 completion 文本里)",
+                stacklevel=2,
+            )
+        return rewards
 
 
 REWARD_NAME = "medforge_selective"

@@ -96,7 +96,7 @@ bash scripts/serve_bench.sh fang04/medforge-qwen3.5-4b-dpo "RTX 5090"
 4B bf16 权重约 8 GB,剩下做 KV),其余留给训练侧。真正让它跑得起来的是三个开关:
 `sleep_level: 1` 在训练步开始前让 vLLM 睡下交还显存,`offload_model` / `offload_optimizer` 在 rollout 期间
 把训练权重和优化器状态挪到 CPU。三个里少任何一个,单卡必 OOM。
-另外 `beta: 0.0` 不加载参考模型,又省下一整份 4B 权重——代价是没有 KL 约束,得靠 `log_completions` 盯格式有没有崩。
+另外 `beta: 0.0` 省掉参考前向和 KL 项(注意省的是算力不是显存:LoRA 本来就不会再加载一份权重,`rlhf_args.py:291` 只在 `tuner_type: full` 时才建 ref_model,beta 非 0 时参考 logprob 是同一份权重关掉 adapter 算的)——代价是没有 KL 约束,得靠 `log_completions` 盯格式有没有崩。
 
 **vllm 必须装进训练 venv,这是「推理栈与训练栈分 venv」那条军规唯一的破例。** colocate 的 vLLM 是在训练进程内
 `import vllm` 起来的,而 `setup_train_env.sh` 刻意只装了 ms-swift。`train_grpo.sh` 的第 0.5 步做这件事:
@@ -110,6 +110,16 @@ bash scripts/serve_bench.sh fang04/medforge-qwen3.5-4b-dpo "RTX 5090"
 `importlib.import_module("grpo_reward")`——不是 `medforge.train.grpo_reward`。所以 `medforge` 没装进 swift venv 时
 插件自己要把 `src/` 补进 `sys.path`(已经写在 `grpo_reward.py` 顶部)。注册靠 import 副作用:
 文件末尾把类塞进 `swift.rewards.orms` 字典,配置里的 `reward_funcs: [medforge_selective]` 就是这个键。
+
+**两个静默失效的坑,都会烧完 300 步才发现。** 一是 `enable_thinking: true` 必须显式写:qwen3_5 模板的
+`non_thinking_prefix` 非空,而 `swift/template/base.py:130` 的默认解析是
+`enable_thinking = is_thinking and not non_thinking_prefix` → **False**,rollout 会走非思考模式,
+completion 里根本没有 `</think>`,奖励插件按「未收尾」全判 -1、组内零方差、优势恒 0——日志里一句错也没有,
+`log_completions` 的样例还看着挺正常(模型确实在答题,只是没思考)。插件为此加了一条兜底:
+整批全判未收尾时 warn 一次提醒查这个键。二是 `generation_batch_size` 数的是 **completion 条数**不是题数,
+唯一题数 = 它 / `num_generations`;它由 `per_device_train_batch_size × world_size × gradient_accumulation_steps`
+推出来,所以单卡上 `gradient_accumulation_steps` 才是决定「每次更新看几道题」的旋钮
+(=2 时每次更新只有 2 道题,是能配出来的最噪的一档;本配置用 16 → 16 道题 × 8 个解)。
 
 **参数名闸门和 SFT 那道一样,但要换 dataclass。** GRPO 的键散在
 `RLHFArguments / GRPOArguments / GRPOArgumentsMixin / RolloutTrainerArgumentsMixin / VllmArguments` 五个 dataclass 里,
