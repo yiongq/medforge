@@ -86,3 +86,41 @@ bash scripts/serve_bench.sh fang04/medforge-qwen3.5-4b-dpo "RTX 5090"
   或本机 `ssh -L 8000:127.0.0.1:8000 -p <port> root@<host>` 建隧道后填 `http://127.0.0.1:8000/v1`
 - vLLM 默认放行跨域,浏览器可直连,不需要额外反代
 - 压测前确认没有别的进程占显存(`nvidia-smi`),否则 FP8 那一档会因残留显存起不来
+
+## GRPO 单卡备忘(2026-09,32 GB 一张卡跑 colocate rollout)
+
+跑法:`bash scripts/train_grpo.sh`(配置 `configs/grpo_qwen35_4b_lora.yaml`)。三件事和 SFT 不一样。
+
+**一张卡要同时装训练和推理,靠的是分时不是分空间。** GRPO 每一步先 rollout(vLLM 采样 8 个解)再更新权重,
+`vllm_mode: colocate` 让两者同卡。显存这样分:`vllm_gpu_memory_utilization: 0.4`(32 GB × 0.4 ≈ 12.8 GB 给 vLLM,
+4B bf16 权重约 8 GB,剩下做 KV),其余留给训练侧。真正让它跑得起来的是三个开关:
+`sleep_level: 1` 在训练步开始前让 vLLM 睡下交还显存,`offload_model` / `offload_optimizer` 在 rollout 期间
+把训练权重和优化器状态挪到 CPU。三个里少任何一个,单卡必 OOM。
+另外 `beta: 0.0` 省掉参考前向和 KL 项(注意省的是算力不是显存:LoRA 本来就不会再加载一份权重,`rlhf_args.py:291` 只在 `tuner_type: full` 时才建 ref_model,beta 非 0 时参考 logprob 是同一份权重关掉 adapter 算的)——代价是没有 KL 约束,得靠 `log_completions` 盯格式有没有崩。
+
+**vllm 必须装进训练 venv,这是「推理栈与训练栈分 venv」那条军规唯一的破例。** colocate 的 vLLM 是在训练进程内
+`import vllm` 起来的,而 `setup_train_env.sh` 刻意只装了 ms-swift。`train_grpo.sh` 的第 0.5 步做这件事:
+先 `import vllm` 探测,缺了才装,版本从推理 venv 里读出来对齐(那边是跑通过的组合,别在这里另挑一个赌一次),
+装前装后各打印一次 torch/transformers/trl/peft/swift/vllm 版本。**装完必须验证 transformers 还认得 qwen3_5**
+(脚本里查 `CONFIG_MAPPING_NAMES`,不认就当场中止)——这正是本文档上面记的那次连锁降级:
+版本号看着都正常,坏的是架构解析,错误会推迟到加载权重甚至更晚才炸。回滚办法是重跑 `setup_train_env.sh` 重建 venv。
+
+**奖励插件是按顶层模块名导入的。** ms-swift 4.5.2 的 `external_plugins` 走
+`swift/utils/utils.py:import_external_file`:把插件文件所在目录 insert 进 `sys.path`,然后
+`importlib.import_module("grpo_reward")`——不是 `medforge.train.grpo_reward`。所以 `medforge` 没装进 swift venv 时
+插件自己要把 `src/` 补进 `sys.path`(已经写在 `grpo_reward.py` 顶部)。注册靠 import 副作用:
+文件末尾把类塞进 `swift.rewards.orms` 字典,配置里的 `reward_funcs: [medforge_selective]` 就是这个键。
+
+**两个静默失效的坑,都会烧完 300 步才发现。** 一是 `enable_thinking: true` 必须显式写:qwen3_5 模板的
+`non_thinking_prefix` 非空,而 `swift/template/base.py:130` 的默认解析是
+`enable_thinking = is_thinking and not non_thinking_prefix` → **False**,rollout 会走非思考模式,
+completion 里根本没有 `</think>`,奖励插件按「未收尾」全判 -1、组内零方差、优势恒 0——日志里一句错也没有,
+`log_completions` 的样例还看着挺正常(模型确实在答题,只是没思考)。插件为此加了一条兜底:
+整批全判未收尾时 warn 一次提醒查这个键。二是 `generation_batch_size` 数的是 **completion 条数**不是题数,
+唯一题数 = 它 / `num_generations`;它由 `per_device_train_batch_size × world_size × gradient_accumulation_steps`
+推出来,所以单卡上 `gradient_accumulation_steps` 才是决定「每次更新看几道题」的旋钮
+(=2 时每次更新只有 2 道题,是能配出来的最噪的一档;本配置用 16 → 16 道题 × 8 个解)。
+
+**参数名闸门和 SFT 那道一样,但要换 dataclass。** GRPO 的键散在
+`RLHFArguments / GRPOArguments / GRPOArgumentsMixin / RolloutTrainerArgumentsMixin / VllmArguments` 五个 dataclass 里,
+脚本走 `RLHFArguments.__mro__` 一次收全。写错的键 ms-swift 是静默忽略而不是报错,训完才发现某个开关没生效最贵。
