@@ -55,6 +55,8 @@ RUN_LABELS: list[tuple[str, str, str]] = [
     ("sft-r1-v2", "抄新教材", "SFT · 2025 年 R1 蒸馏的医学 CoT"),
     ("dpo-v2", "自己刷题", "DPO · 基座自采样,验证器判分配对"),
     ("base-v3-sample", "基座 · 正确解码", "同一份基座权重,不训练;官方采样参数 + 32k 预算(协议 v3)"),
+    ("distill-v3-sample", "蒸馏 2.0", "SFT · 实测 93% 的老师在去污染的 CMExam 训练题上写题解,五道闸门筛(协议 v3)"),
+    ("abstain-v3-sample", "学会说不确定", "弃权 SFT · 蒸馏模型自采样分会/不会,不会的题改教「答案:不确定」(协议 v3)"),
 ]
 # 协议按 run 名判定:v3 = 官方采样参数 + 32768 预算 + 截断守卫;其余为 v2(贪心 + 8192)
 V2_RUNS = [k for k, _, _ in RUN_LABELS if "-v3" not in k]

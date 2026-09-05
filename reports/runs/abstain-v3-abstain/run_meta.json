@@ -1,0 +1,38 @@
+{
+  "run_name": "abstain-v3-abstain",
+  "model": "abstain",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 8192,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": -1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "seed": 42,
+  "mode": "plain",
+  "extra_body": null,
+  "provider": "openai",
+  "effort": null,
+  "prompt": "abstain",
+  "prompt_sha": "ad038943",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "3277836-dirty",
+  "created": "2026-09-05T11:54:10+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "3277836-dirty",
+      "created": "2026-09-05T11:54:10+08:00"
+    },
+    {
+      "git": "89688ba-dirty",
+      "created": "2026-09-05T12:38:59+08:00"
+    }
+  ]
+}

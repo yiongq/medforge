@@ -14,6 +14,8 @@ const SET_SHORT: Record<string, string> = { cmexam: 'CMExam', 'cmb-val': 'CMB-va
 const SET_ORDER = ['cmexam', 'cmb-val', 'medxpertqa']
 const BASELINE = 'base-v2'
 const V3_RUN = 'base-v3-sample'
+const DISTILL_RUN = 'distill-v3-sample'
+const ABSTAIN_RUN = 'abstain-v3-sample'
 
 /** 首屏一律用严格口径(写完 ∧ 有结论 ∧ 答对);没跑过 usability 的 run 才退回宽口径。 */
 const strictOf = (r: ScoreRow | undefined) => (r ? r.strict ?? r.acc : null)
@@ -105,6 +107,11 @@ export default function App() {
     .filter((r) => r.run === BASELINE && r.finished !== undefined)
     .map((r) => r.finished!)
   const hasV3 = v3Main !== undefined
+  const distillMain = cell(DISTILL_RUN, 'cmexam')
+  const distillStrict = strictOf(distillMain)
+  const distillGain = distillStrict !== null && v3Strict !== null ? distillStrict - v3Strict : null
+  const abstainMain = cell(ABSTAIN_RUN, 'cmexam')
+  const hasDistill = distillMain !== undefined
   const peak = (l: string) => Math.max(...(benches?.find((b) => b.label === l)?.levels.map((lv) => lv.output_tok_s ?? 0) ?? [0]))
   const fp8Gain = benches && peak('bf16') ? Math.round(((peak('fp8') - peak('bf16')) / peak('bf16')) * 100) : null
 
@@ -114,17 +121,23 @@ export default function App() {
       <div className="shell">
         <section id="finding" className="hero" style={{ paddingTop: '3rem' }}>
           <div>
-            <div className="eyebrow">P2 解码裁决 · 核心发现</div>
-            <h1>W2 的成绩表,<br />量的是解码方式,不是模型。</h1>
+            <div className="eyebrow">{hasDistill ? '蒸馏 2.0 · 核心发现' : 'P2 解码裁决 · 核心发现'}</div>
+            <h1>{hasDistill ? <>先修尺子,再训模型:<br />训练第一次真的涨了分。</> : <>W2 的成绩表,<br />量的是解码方式,不是模型。</>}</h1>
             <p className="lede">
-              {hasV3 ? (
+              {hasV3 && hasDistill ? (
+                <>
+                  W2 那张「训练毫无增益」的表,量的是贪心解码不是模型:同一份 Qwen3.5-4B 基座只换成官方采样参数 + 32k 预算,
+                  CMExam 严格口径就从 {baseStrict?.toFixed(1)}% 到 {v3Strict?.toFixed(1)}%。
+                  尺子修好后,用实测 93% 的老师在去污染的训练题上蒸馏,同一个 4B 到 <b>{distillStrict?.toFixed(1)}%</b>
+                  ({distillGain !== null && distillGain > 0 ? '+' : ''}{distillGain?.toFixed(1)}pp,p&lt;10⁻⁴),每题 token 降到三分之一,三卷收尾率 100%。
+                  {abstainMain ? <> 再教它说「不确定」(弃权 SFT):动作学会了,时机没学会——弃权 {abstainMain.abstain.toFixed(1)}% 的题里六成本来能答对,GRPO 接着治。</> : null}
+                </>
+              ) : hasV3 ? (
                 <>
                   同一份 Qwen3.5-4B 基座权重,不训练、不改提示词,只把贪心解码换成官方采样参数 + 32k 预算:
                   CMExam 严格口径 {baseStrict?.toFixed(1)}% → {v3Strict?.toFixed(1)}%
                   ({decodeGain !== null && decodeGain > 0 ? '+' : ''}{decodeGain?.toFixed(1)}pp),
                   三卷收尾率全部到 {v3Finished?.toFixed(0)}%。
-                  三个训练臂仍是 v2 协议下的历史数字,<b>尚未在 v3 下重评</b>——所以下表末行与前四行之间的差,
-                  该读成「解码方式的差」,不是「谁的模型更好」。
                 </>
               ) : (
                 <>协议 v3 的成绩尚未导出,当前表格仍是 v2 协议下的历史数字。</>
