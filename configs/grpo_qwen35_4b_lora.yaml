@@ -50,10 +50,11 @@ learning_rate: 5.0e-6
 lr_scheduler_type: cosine
 warmup_ratio: 0.03
 gradient_checkpointing: true
+use_liger_kernel: true            # 走 LigerFusedLinearGRPOLoss(分块算 loss,不落 4k×25万 的 fp32 logits):实测不开时训练相跑到第 3 步 OOM(差 1 GB)
 seed: 42
 
-dataset: data/processed/grpo_train.jsonl      # medforge.data.build_grpo --skip 4000 --n 6000
-val_dataset: data/processed/grpo_eval.jsonl   # 同一次 build 的 --eval-n 200,与训练段不重叠
+dataset: data/processed/grpo_train_unstable.jsonl   # 只用蒸馏模型 4 次采样里 1~3 次答对的题(弃权阶段分出的 unstable,未进过任何教材):全对/全错的题组内奖励无方差、纯烧卡——实测随机切片时 60~69% 的组零方差
+val_dataset: data/processed/grpo_eval_unstable.jsonl  # 同一批 unstable 题里留出的 100 题
 
 # 一次 rollout 出 8 个解:GRPO 的优势是组内标准化出来的,组太小(< 4)优势噪声压不住。
 # 注意 generation_batch_size 数的是 completion 总数而不是题数(args_mixin.py:154 的原话:
@@ -68,8 +69,8 @@ val_dataset: data/processed/grpo_eval.jsonl   # 同一次 build 的 --eval-n 200
 # 单卡上这是数十小时量级的租金,先用 max_steps: 10 跑一轮量出每步耗时再决定 300 是不是跑得完。
 # 题量上 300 步 × 16 题 ≈ 4800 题,正好把 build_grpo 的 6000 题吃掉八成(不到一轮)。
 num_generations: 8
-per_device_train_batch_size: 8
-gradient_accumulation_steps: 16
+per_device_train_batch_size: 1    # 每个 micro-batch 的 completion 数;8 条 × 4k token × 25 万词表的 fp32 logits = 30 GiB,单卡直接 OOM(实测),只能 1
+gradient_accumulation_steps: 128  # generation_batch_size = 1 × 128 = 128 条 completion = 16 题 × 8 采样,每个优化步不变
 
 # 4096:CMExam-train 的答卷在蒸馏模型下中位 ≈ 420 token、p90 ≈ 4.7k(reports/usability-v3-train.md 的
 # 「每题 token 均值 1.8k」是三卷混合值,CMExam 单卷更短)。给到 4096 覆盖住九成。
@@ -113,18 +114,23 @@ log_completions: true
 
 use_vllm: true
 vllm_mode: colocate                  # 单卡只能同居:rollout 与训练轮流占显存
-vllm_gpu_memory_utilization: 0.4     # 32 GB × 0.4 ≈ 12.8 GB 给 vLLM(4B bf16 权重 ≈ 8 GB + KV)
+vllm_gpu_memory_utilization: 0.4     # 32 GB × 0.4 ≈ 12.8 GB 给 vLLM(4B bf16 权重 ≈ 8 GB + KV);0.3 起不来(权重之外没剩下 cache 块)
+vllm_max_num_seqs: 32                # Qwen3.5 的 Mamba/GDN 层每条解码序列占一个 cache block:0.4 显存只够 121 块、0.3 更少,默认 128 并发起不来(实测 ValueError);32 并发分四波跑完 128 条 rollout
+vllm_enforce_eager: true             # 不捕 CUDA graph:省 1~2 GB 显存与启动时间,rollout 慢两三成,单卡显存优先
+vllm_max_lora_rank: 64               # 默认 16 < 训练用的 r=64,vLLM 侧挂 LoRA 会拒
 sleep_level: 1                       # 训练步开始前让 vLLM 睡下、交还显存;不开单卡必 OOM
 offload_model: true                  # 同理:rollout 期间把训练权重挪到 CPU
 offload_optimizer: true
+move_model_batches: 8                # 权重同步到 vLLM 分 8 批搬,压掉同步时的显存峰值(实测一次性同步要 15 GiB)
 
-max_steps: 300
-save_steps: 50
+max_steps: 100                # 单卡实测约 6 分钟/步(rollout 128 条 + 128 个 micro-batch),100 步 ≈ 10 小时;812 题 × 8 采样 ≈ 2 个 epoch
+save_steps: 25
 save_total_limit: 2                  # RL 没有 load_best_model_at_end,留最近两个点够回滚了
 logging_steps: 5
 eval_strategy: steps
-eval_steps: 50
-per_device_eval_batch_size: 8        # 全局 eval batch 必须被 num_generations_eval 整除(默认 = num_generations = 8)
+eval_steps: 25
+per_device_eval_batch_size: 1
+num_generations_eval: 1           # 评估批只能 1(logits 显存),必须能被它整除 → 验证集每题采 1 次
 output_dir: output/grpo_v1
 
 # 奖励:唯一一条,权重默认全 1,所以不写 reward_weights(写了长度必须与 reward_funcs 相等)。
