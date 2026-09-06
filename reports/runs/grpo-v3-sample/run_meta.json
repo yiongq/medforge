@@ -1,0 +1,38 @@
+{
+  "run_name": "grpo-v3-sample",
+  "model": "grpo",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "max_tokens": 32768,
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 1.5,
+  "seed": 42,
+  "mode": "plain",
+  "extra_body": null,
+  "provider": "openai",
+  "effort": null,
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "3277836-dirty",
+  "created": "2026-09-06T10:54:16+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "3277836-dirty",
+      "created": "2026-09-06T10:54:16+08:00"
+    },
+    {
+      "git": "31343d1",
+      "created": "2026-09-06T11:56:08+08:00"
+    }
+  ]
+}
