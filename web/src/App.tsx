@@ -16,6 +16,7 @@ const BASELINE = 'base-v2'
 const V3_RUN = 'base-v3-sample'
 const DISTILL_RUN = 'distill-v3-sample'
 const ABSTAIN_RUN = 'abstain-v3-sample'
+const GRPO_RUN = 'grpo-v3-sample'
 
 /** 首屏一律用严格口径(写完 ∧ 有结论 ∧ 答对);没跑过 usability 的 run 才退回宽口径。 */
 const strictOf = (r: ScoreRow | undefined) => (r ? r.strict ?? r.acc : null)
@@ -111,6 +112,8 @@ export default function App() {
   const distillStrict = strictOf(distillMain)
   const distillGain = distillStrict !== null && v3Strict !== null ? distillStrict - v3Strict : null
   const abstainMain = cell(ABSTAIN_RUN, 'cmexam')
+  const grpoMain = cell(GRPO_RUN, 'cmexam')
+  const grpoStrict = strictOf(grpoMain)
   const hasDistill = distillMain !== undefined
   const peak = (l: string) => Math.max(...(benches?.find((b) => b.label === l)?.levels.map((lv) => lv.output_tok_s ?? 0) ?? [0]))
   const fp8Gain = benches && peak('bf16') ? Math.round(((peak('fp8') - peak('bf16')) / peak('bf16')) * 100) : null
@@ -130,7 +133,8 @@ export default function App() {
                   CMExam 严格口径就从 {baseStrict?.toFixed(1)}% 到 {v3Strict?.toFixed(1)}%。
                   尺子修好后,用实测 93% 的老师在去污染的训练题上蒸馏,同一个 4B 到 <b>{distillStrict?.toFixed(1)}%</b>
                   ({distillGain !== null && distillGain > 0 ? '+' : ''}{distillGain?.toFixed(1)}pp,p&lt;10⁻⁴),每题 token 降到三分之一,三卷收尾率 100%。
-                  {abstainMain ? <> 再教它说「不确定」(弃权 SFT):动作学会了,时机没学会——弃权 {abstainMain.abstain.toFixed(1)}% 的题里六成本来能答对,GRPO 接着治。</> : null}
+                  {abstainMain ? <> 再教它说「不确定」(弃权 SFT):动作学会了,时机没学会——弃权 {abstainMain.abstain.toFixed(1)}% 的题里六成本来能答对。</> : null}
+                  {grpoMain && grpoStrict !== null ? <> GRPO(答对 +1、弃权 0、答错 −1)把弃权率砍到 {grpoMain.abstain.toFixed(1)}%、总分回到 {grpoStrict.toFixed(1)}%,但弃错题的毛病没治好:弃权路线到此为止,主模型仍是蒸馏 2.0。</> : null}
                 </>
               ) : hasV3 ? (
                 <>
