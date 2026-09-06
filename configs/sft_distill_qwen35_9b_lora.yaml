@@ -1,0 +1,49 @@
+# 蒸馏 2.0 SFT:Qwen3.5-4B + LoRA 全层,教材 = 强老师(DeepSeek V4)在去污染 CMExam 训练集上出的题解,
+# 经五道闸门筛选(build_distill build 产出 data/processed/sft_distill_v1.jsonl,报告 reports/distill-dataset.md)。
+# 运行:~/swift-env/bin/swift sft configs/sft_distill_qwen35_4b_lora.yaml
+#
+# 与 W2 两份 SFT 配置的差别(每一处都对应 W2 审查里一个已确认的失效模式):
+#   - max_length 4096 → 8192 + 显式 truncation_strategy: delete:W2 R1 教材 20% 样本超 4096 被截,
+#     截半的思考链没有 </think> 正是「永不收尾」的教学信号;本教材在数据侧已硬筛 ≤ 8192(build_distill --train-max-length)
+#   - lr 1e-4 → 5e-5;batch 统一 1×16;r=64 不动(保住跨臂可比,不要和 lr 一起降)
+#   - eval_strategy + load_best_model_at_end:W2 切了 2% 验证集却从没用它选点
+#   - use_liger_kernel / lazy_tokenize / packing 显式写死(W2 SFT 漏了 liger 与 lazy_tokenize)
+#   - 教材 user 侧用与评测完全同一份提示词(build_distill 从 eval/run.py 导入),assistant 侧是完整的 <think>…</think>
+model: Qwen/Qwen3.5-9B               # 学生换 9B:同一份教材、同一套配方,只换学生(4B 天花板 ~85,见 reports/grpo.md)
+tuner_type: lora
+target_modules: all-linear
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+learning_rate: 5.0e-5
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+num_train_epochs: 2
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16   # 有效 batch 16
+
+max_length: 6144                  # 9B 权重 18G + liger 未融合的 logits,8192 在 32G 上放不下(4B 弃权阶段实测),6144 只丢 3.4% 最长行
+truncation_strategy: delete       # 显式:超长丢弃而非截断
+lazy_tokenize: false              # 【必须】否则 filtered 计数不会在开训前打印,止损闸空转
+packing: false                    # 显式关闭:packing 跨样本拼接会污染 </think> 边界信号
+use_liger_kernel: true            # 【必须】8192 × 大词表的 logits 不开 fused CE 会爆显存
+torch_dtype: bfloat16
+gradient_checkpointing: true
+seed: 42
+
+dataset: data/processed/sft_distill_v1.jsonl
+add_non_thinking_prefix: true     # 通用回放样本无 think 段:自动补空思考前缀
+loss_scale: ignore_empty_think    # 空 think 不计损失
+split_dataset_ratio: 0.02
+eval_strategy: steps              # 【必须】eval_steps 单独出现不必然打开评估
+eval_steps: 50
+save_steps: 50
+save_total_limit: -1              # 不限:最佳 ckpt 不能在训练结束前被删
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+logging_steps: 5
+output_dir: output/sft_distill_9b_v1
+
+report_to: swanlab
+swanlab_project: medforge
+swanlab_mode: cloud

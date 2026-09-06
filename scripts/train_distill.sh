@@ -91,4 +91,4 @@ RUN_PREFIX="$PREFIX" bash scripts/eval_p2_arms.sh "$OUT/merged" "$ARMS"
 pkill -f "vllm serv[e]" 2>/dev/null || true
 echo "✓ 全部完成 $(date +%T):reports/runs/$PREFIX-v3-*/;把小文件 rsync 回本地再关机"
 echo "  弃权验收(本地):uv run python -m medforge.eval.abstain_report --run $PREFIX-v3-sample --ref distill-v3-sample"
-[ "${SHUTDOWN:-0}" = "1" ] && { sync; shutdown; }
+if [ "${SHUTDOWN:-0}" = "1" ]; then sync; shutdown; fi   # 不能写成 AND-list:set -e 下不传 SHUTDOWN 时脚本会以 1 退出,套在别的脚本里会被当成失败
