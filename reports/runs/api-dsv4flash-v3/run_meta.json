@@ -1,0 +1,40 @@
+{
+  "run_name": "api-dsv4flash-v3",
+  "model": "deepseek-v4-flash",
+  "endpoint": "https://api.deepseek.com",
+  "max_tokens": 32768,
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 1.5,
+  "seed": 42,
+  "mode": "plain",
+  "extra_body": "{\"thinking\": {\"type\": \"enabled\"}}",
+  "prompt": "default",
+  "prompt_sha": "1f256db8",
+  "samples": {
+    "cmexam": 2000,
+    "medxpertqa": 1000
+  },
+  "limit": 0,
+  "thinking": "on",
+  "llm_judge": true,
+  "git": "fd2dd81-dirty",
+  "created": "2026-09-04T10:17:30+08:00",
+  "legacy": false,
+  "history": [
+    {
+      "git": "fd2dd81-dirty",
+      "created": "2026-09-04T10:17:30+08:00"
+    },
+    {
+      "git": "75fa1f8",
+      "created": "2026-09-04T11:15:13+08:00"
+    },
+    {
+      "git": "3277836",
+      "created": "2026-09-04T14:11:21+08:00"
+    }
+  ]
+}
